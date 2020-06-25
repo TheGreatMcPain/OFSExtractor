@@ -7,6 +7,10 @@
 #include <sys/stat.h>
 #include <time.h>
 
+#if __MINGW32__
+#include <direct.h>
+#endif
+
 #define MAXPLANES 32
 #define MAXCACHE 536870912 // Will stop if ram usage hits 512MB.
 
@@ -112,8 +116,11 @@ void createOFSFiles(BYTE **planes, struct OFMDdata OFMDdata, int validPlanes[],
   if (stat(outFolder, &sb) == 0 && S_ISDIR(sb.st_mode)) {
     printf("Output folder exists!.\n");
   } else {
-    // create the output directory.
+#ifdef __MINGW32__ // Windows uses a different mkdir.
+    _mkdir(outFolder);
+#else
     mkdir(outFolder, 0777);
+#endif
   }
 
   // The OFS should be 41 bytes plus the number of depth values (frames).
@@ -163,7 +170,11 @@ void createOFSFiles(BYTE **planes, struct OFMDdata OFMDdata, int validPlanes[],
 
       // Create name for outFile.
       sprintf(ofsName, "3D-Plane-%02d.ofs", plane);
+#ifdef __MINGW32__ // Windows uses backslashes in it's path.
+      strcat(outFile, "\\");
+#else
       strcat(outFile, "/");
+#endif
       strcat(outFile, ofsName);
 
       ofsFile = fopen(outFile, "wb");
