@@ -8,6 +8,7 @@
 #include <time.h>
 
 #define MAXPLANES 32
+#define MAXCACHE 536870912 // Will stop if ram usage hits 512MB.
 
 typedef unsigned char BYTE;
 
@@ -55,6 +56,11 @@ int main(int argc, char *argv[]) {
 
   OFMDs = (BYTE **)malloc(sizeof(BYTE *));
   numOFMDs = getOFMDsFromFile(argv[1], &OFMDs);
+
+  if (numOFMDs == 0) {
+    printf("This file doesn't have any 3D-Planes.\n");
+    exit(1);
+  }
 
   getPlanesFromOFMDs(&OFMDs, numOFMDs, &OFMDdata, &planes);
 
@@ -433,6 +439,13 @@ FILE *searchStringInFile(char *small, int smallSize, int blockSize, FILE *file,
       blockSize += origBlockSize;
       buffer = (BYTE *)realloc(buffer, blockSize * sizeof(BYTE));
       fread(buffer + origBlockSize, 1, origBlockSize, file);
+      if (blockSize >= MAXCACHE) {
+        printf("Oops! We've hit are memory limit searching for 3D Planes.\n");
+        int lastBlockSizeMB = (float)blockSize / 1048576;
+        printf("Size of search buffer before exit: %d MB\n", lastBlockSizeMB);
+        free(buffer);
+        return NULL;
+      }
     }
     smallPos = offsetPtr - buffer;
     found = true;
