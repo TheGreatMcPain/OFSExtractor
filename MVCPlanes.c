@@ -7,7 +7,7 @@
 #include <sys/stat.h>
 #include <time.h>
 
-#if __MINGW32__
+#if _WIN32
 #include <direct.h>
 #endif
 
@@ -102,21 +102,22 @@ void createOFSFiles(BYTE **planes, struct OFMDdata OFMDdata, int validPlanes[],
   char outFile[4096]; // will become what's used with fopen.
   BYTE *buffer;
   int bufferOffset;
-  BYTE frameRate;
+  // Structure of the OFS file.
   BYTE signiture[8] = {0x89, 0x4f, 0x46, 0x53, 0x0d, 0x0a, 0x1a, 0x0a};
   BYTE version[4] = {0x30, 0x31, 0x30, 0x30};
   BYTE GUID[16];
-  BYTE frameArray[4] = {0x00, 0x00, 0x00, 0x00};
+  BYTE frameRate;
+  BYTE dropframe = 0;
   BYTE rollsAndReserved[4] = {0x01, 0x00, 0x00, 0x00};
   BYTE timecode[4] = {0x00, 0x00, 0x00, 0x00};
-  BYTE dropframe = 0;
+  BYTE frameArray[4] = {0x00, 0x00, 0x00, 0x00};
   srand(time(NULL));
   struct stat sb;
 
   if (stat(outFolder, &sb) == 0 && S_ISDIR(sb.st_mode)) {
     printf("Output folder exists!.\n");
   } else {
-#ifdef __MINGW32__ // Windows uses a different mkdir.
+#ifdef _WIN32 // Windows uses a different mkdir.
     _mkdir(outFolder);
 #else
     mkdir(outFolder, 0777);
@@ -148,7 +149,7 @@ void createOFSFiles(BYTE **planes, struct OFMDdata OFMDdata, int validPlanes[],
     bufferOffset = 12;
     strcpy(outFile, outFolder);
     if (validPlanes[plane] == 1) {
-      GUID[15] = (BYTE)plane;
+      GUID[15] = (BYTE)plane; // Copy the plane number to the end of the GUID.
 
       memcpy(buffer + bufferOffset, GUID, 16); // Copy guid
       bufferOffset += 16;
@@ -170,12 +171,12 @@ void createOFSFiles(BYTE **planes, struct OFMDdata OFMDdata, int validPlanes[],
 
       // Create name for outFile.
       sprintf(ofsName, "3D-Plane-%02d.ofs", plane);
-#ifdef __MINGW32__ // Windows uses backslashes in it's path.
+#ifdef _WIN32 // Windows uses backslashes in it's path.
       strcat(outFile, "\\");
 #else
       strcat(outFile, "/");
 #endif
-      strcat(outFile, ofsName);
+      strcat(outFile, ofsName); // Append the file name to the output path.
 
       ofsFile = fopen(outFile, "wb");
       if (ofsFile == NULL) {
@@ -275,11 +276,16 @@ void getPlanesFromOFMDs(BYTE ***OFMDs, int numOFMDs, struct OFMDdata *OFMDdata,
 
   OFMDdata->totalFrames = totalFrames;
 
+  // Allocate planes array like this planes[numOfPlanes][totalFrames]
   *planes = (BYTE **)malloc(numOfPlanes * sizeof(BYTE *));
   for (int plane = 0; plane < numOfPlanes; plane++) {
     (*planes)[plane] = (BYTE *)malloc(totalFrames * sizeof(BYTE));
   }
 
+  // Place the depth values into each plane.
+  // Not gonna lie, it's pretty ugly looking. Depths are stored like this:
+  //
+  // (14 * Plane #) to (14 * Plane #) + (framecount from OFMD).
   counter = 0;
   totalFrames = 0;
   for (int OFMD = 0; OFMD < numOFMDs; OFMD++) {
@@ -347,6 +353,7 @@ void verifyPlanes(struct OFMDdata OFMDdata, BYTE **planes, int validPlanes[]) {
   }
 }
 
+// Prints information about the 3D-Plane.
 void parseDepths(BYTE *plane, int numFrames) {
   int minval = 128;
   int maxval = -128;
