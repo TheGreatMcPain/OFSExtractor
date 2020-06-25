@@ -238,8 +238,9 @@ int getOFMDsFromFile(const char *fileName, BYTE ***OFMDs) {
       break;
     }
     int status = ceil(((double)ftello(filePtr) / (double)fileSize) * 100);
-    printf("\rProgress %d%s", status, "%");
-    fflush(stdout);
+    // Print to stderr incase we want to pipe to a file.
+    fprintf(stderr, "\rProgress %d%s", status, "%");
+    fflush(stderr);
     // Prepare to search for the next OFMD.
     fseeko(filePtr, 1, SEEK_CUR);
   }
