@@ -7,8 +7,13 @@
 #include <sys/stat.h>
 #include <time.h>
 
+#if !_WIN32         // If we're not on windows use POSIX basename.
+#include <libgen.h> /* basename */
+#endif
+
 #if _WIN32
 #include <direct.h>
+char *basename(char *path); // Use our basename if on windows.
 #endif
 
 #define MAXPLANES 32
@@ -96,7 +101,9 @@ void print_hex_memory(void *mem) {
 }
 
 void usage(int argc, char *argv[]) {
-  printf("Usage: %s <input.mvc> <output folder>\n", argv[0]);
+  char *program = basename(argv[0]);
+
+  printf("Usage: %s <input.mvc> <output folder>\n", program);
   exit(0);
 }
 
@@ -208,7 +215,7 @@ int getOFMDsFromFile(const char *fileName, BYTE ***OFMDs) {
   BYTE *posPtr;
   off_t OFMDpos;
   BYTE *buffer;
-  const int blockSize = 1048576;
+  const int blockSize = 524288;
   BYTE seiString[4] = {0x00, 0x01, 0x06, 0x25};
   int numOFMDs = 0;
   BYTE frameRate;
@@ -550,3 +557,25 @@ void *my_memmem(const void *haystack, size_t haystacklen, const void *needle,
 
   return NULL;
 }
+
+#if _WIN32 // Windows implementation of basename.
+char *basename(char *path) {
+  char drive[_MAX_DRIVE];
+  char dir[_MAX_DIR];
+  char fname[_MAX_FNAME];
+  char ext[_MAX_EXT];
+  errno_t err;
+
+  err = _splitpath_s(path, drive, _MAX_DRIVE, dir, _MAX_DIR, fname, _MAX_FNAME,
+                     ext, _MAX_EXT);
+
+  if (err != 0) {
+    printf("Error Splitting path. %d\n", err);
+  }
+
+  strcpy(path, fname);
+  strcat(path, ext);
+
+  return path;
+}
+#endif
