@@ -29,13 +29,12 @@ struct OFMDdata {
  * Function definitions.
  */
 int getOFMDsFromFile(const char *fileName, BYTE ***OFMDs);
-FILE *searchStringInFile(char *small, int smallSize, int blockSize, FILE *file,
+FILE *searchStringInFile(BYTE *small, int smallSize, int blockSize, FILE *file,
                          off_t fileSize);
 void getPlanesFromOFMDs(BYTE ***OFMDs, int numOFMDs, struct OFMDdata *OFMDdata,
                         BYTE ***planes);
-void *my_memmem(const void *big, size_t big_len, const void *little,
-                size_t little_len);
-static inline off_t min(off_t x, off_t y);
+void *my_memmem(const void *haystack, size_t haystacklen, const void *needle,
+                size_t needlelen);
 void verifyPlanes(struct OFMDdata OFMDdata, BYTE **planes, int validPlanes[]);
 void parseDepths(BYTE *plane, int numFrames);
 void free2DArray(void ***array, int array2DSize);
@@ -146,9 +145,9 @@ void createOFSFiles(BYTE **planes, struct OFMDdata OFMDdata, int validPlanes[],
   frameRate = (OFMDdata.frameRate * 16) + dropframe;
 
   for (int plane = 0; plane < OFMDdata.numOfPlanes; plane++) {
-    bufferOffset = 12;
-    strcpy(outFile, outFolder);
     if (validPlanes[plane] == 1) {
+      bufferOffset = 12;
+      strcpy(outFile, outFolder);
       GUID[15] = (BYTE)plane; // Copy the plane number to the end of the GUID.
 
       memcpy(buffer + bufferOffset, GUID, 16); // Copy guid
@@ -200,8 +199,11 @@ void free2DArray(void ***array, int array2DSize) {
 // Collects the OFMD data from the MVC file, and stores it in a 2D array.
 int getOFMDsFromFile(const char *fileName, BYTE ***OFMDs) {
   FILE *filePtr;
+  BYTE *posPtr;
+  off_t OFMDpos;
   BYTE *buffer;
   const int blockSize = 1048576;
+  BYTE seiString[4] = {0x00, 0x01, 0x06, 0x25};
   int numOFMDs = 0;
   BYTE frameRate;
 
@@ -216,8 +218,22 @@ int getOFMDsFromFile(const char *fileName, BYTE ***OFMDs) {
   fseeko(filePtr, 0, SEEK_SET);
 
   while (1) {
-    // Search for the next OFMD position in the file.
-    if (searchStringInFile("OFMD", 4, blockSize, filePtr, fileSize) != NULL) {
+    // Search for the next SEI position in the file.
+    if (searchStringInFile(seiString, 4, blockSize, filePtr, fileSize) !=
+        NULL) {
+      // Check for nearby OFMD.
+      buffer = (BYTE *)malloc(200 * sizeof(BYTE));
+      fread(buffer, 1, 200, filePtr);
+      if ((posPtr = my_memmem(buffer, 200, "OFMD", 4)) != NULL) {
+        // Seek to OFMD
+        OFMDpos = (posPtr - buffer) - 200;
+        fseeko(filePtr, OFMDpos, SEEK_CUR);
+        // printf("%ld\n", OFMDpos);
+      } else {
+        free(buffer);
+        continue;
+      }
+
       // Store the OFMD's data into buffer.
       buffer = (BYTE *)malloc(4096 * sizeof(BYTE));
       fread(buffer, 1, 4096, filePtr);
@@ -242,8 +258,6 @@ int getOFMDsFromFile(const char *fileName, BYTE ***OFMDs) {
     // Print to stderr incase we want to pipe to a file.
     fprintf(stderr, "\rProgress %d%s", status, "%");
     fflush(stderr);
-    // Prepare to search for the next OFMD.
-    fseeko(filePtr, 1, SEEK_CUR);
   }
 
   fclose(filePtr);
@@ -409,9 +423,14 @@ void parseDepths(BYTE *plane, int numFrames) {
   }
 }
 
+// From: https://stackoverflow.com/a/46156986/13793328
+// Returns the smallest of two numbers.
+// (Using off_t since we're working with large files.)
+static inline off_t min(off_t x, off_t y) { return (x < y) ? x : y; }
+
 // A Utility function to getOFMDsFromFile that moves the FILE pointer to the
 // first position of a string.
-FILE *searchStringInFile(char *small, int smallSize, int blockSize, FILE *file,
+FILE *searchStringInFile(BYTE *small, int smallSize, int blockSize, FILE *file,
                          off_t fileSize) {
   BYTE *buffer;
   BYTE *offsetPtr;
@@ -431,8 +450,7 @@ FILE *searchStringInFile(char *small, int smallSize, int blockSize, FILE *file,
   // chunk of the file.
   if (blockSize < origBlockSize) {
     if ((offsetPtr = my_memmem(buffer, blockSize, small, smallSize)) != NULL) {
-      smallPos = offsetPtr - buffer;
-      fseeko(file, -blockSize, SEEK_CUR);
+      smallPos = (offsetPtr - buffer) - blockSize;
       fseeko(file, smallPos, SEEK_CUR);
       free(buffer);
       return file;
@@ -447,7 +465,7 @@ FILE *searchStringInFile(char *small, int smallSize, int blockSize, FILE *file,
   // Check if 'small' exists in the current buffer.
   if ((offsetPtr = my_memmem(buffer, blockSize, small, smallSize)) != NULL) {
     // Set the position of 'small' within the buffer.
-    smallPos = offsetPtr - buffer;
+    smallPos = (offsetPtr - buffer) - blockSize;
     found = true;
   } else {
     // If 'small' doesn't exist we need to search more of the file.
@@ -466,12 +484,11 @@ FILE *searchStringInFile(char *small, int smallSize, int blockSize, FILE *file,
         return NULL;
       }
     }
-    smallPos = offsetPtr - buffer;
+    smallPos = (offsetPtr - buffer) - blockSize;
     found = true;
   }
 
   // Once the position is found seek to that location in the file.
-  fseeko(file, -blockSize, SEEK_CUR);
   fseeko(file, smallPos, SEEK_CUR);
 
   // If the string in found, return the file pointer.
@@ -484,26 +501,46 @@ FILE *searchStringInFile(char *small, int smallSize, int blockSize, FILE *file,
   }
 }
 
-// From: https://stackoverflow.com/a/46156986/13793328
-// Returns the smallest of two numbers.
-static inline off_t min(off_t x, off_t y) { return (x < y) ? x : y; }
+// From: https://www.capitalware.com/rl_blog/?p=5847
+/**
+ * Function Name
+ *  memmem
+ *
+ * Description
+ *  Like strstr(), but for non-text buffers that are not NULL delimited.
+ *
+ *  public domain by Bob Stout
+ *
+ * Input parameters
+ *  haystack    - pointer to the buffer to be searched
+ *  haystacklen - length of the haystack buffer
+ *  needle      - pointer to a buffer that will be searched for
+ *  needlelen   - length of the needle buffer
+ *
+ * Return Value
+ *  pointer to the memory address of the match or NULL.
+ */
+void *my_memmem(const void *haystack, size_t haystacklen, const void *needle,
+                size_t needlelen) {
+  /* --------------------------------------------
+   * Variable declarations.
+   * --------------------------------------------
+   */
+  char *bf = (char *)haystack, *pt = (char *)needle, *p = bf;
 
-// From: https://stackoverflow.com/a/30683927/13793328
-// A more portable solution to memmem.
-void *my_memmem(const void *big, size_t big_len, const void *little,
-                size_t little_len) {
-  void *iterator;
-  if (big_len < little_len)
-    return NULL;
-
-  iterator = (void *)big;
-  while (1) {
-    iterator = memchr(iterator, ((unsigned char *)little)[0],
-                      big_len - (iterator - big));
-    if (iterator == NULL)
-      return NULL;
-    if (iterator && !memcmp(iterator, little, little_len))
-      return iterator;
-    iterator++;
+  /* --------------------------------------------
+   * Code section
+   * --------------------------------------------
+   */
+  while (needlelen <= (haystacklen - (p - bf))) {
+    if (NULL != (p = memchr(p, (int)(*pt), haystacklen - (p - bf)))) {
+      if (0 == memcmp(p, needle, needlelen))
+        return p;
+      else
+        ++p;
+    } else
+      break;
   }
+
+  return NULL;
 }
