@@ -53,6 +53,12 @@ int main(int argc, char *argv[]) {
   int numOFMDs;
   int numOfValidPlanes;
 
+  // Zero out validPlanes
+  // to prevent it from creating false ofs files.
+  for (int x = 0; x < MAXPLANES; x++) {
+    validPlanes[x] = 0;
+  }
+
   if (argc < 3) {
     usage(argc, argv);
   }
