@@ -16,7 +16,8 @@
 char *basename(char *path); // Use our basename if on windows.
 #endif
 
-#define MAXPLANES 32
+#define MAXPLANES 32       // Most 3D Blurays have 32 planes.
+#define BLOCKSIZE 131072   // When searching for planes seek in 128KB chunks.
 #define MAXCACHE 536870912 // Will stop if ram usage hits 512MB.
 
 typedef unsigned char BYTE;
@@ -209,20 +210,29 @@ void free2DArray(void ***array, int array2DSize) {
   free(*array);
 }
 
+void checkFileError(FILE *file) {
+  if (ferror(file) != 0) {
+    printf("Failed to read from file. Exiting.\n");
+  }
+  if (feof(file) != 0) {
+    printf("We have reached end-of-file. Exiting.\n");
+  }
+}
+
 // Collects the OFMD data from the MVC file, and stores it in a 2D array.
 int getOFMDsFromFile(const char *fileName, BYTE ***OFMDs) {
   FILE *filePtr;
   BYTE *posPtr;
   off_t OFMDpos;
   BYTE *buffer;
-  const int blockSize = 524288;
+  const int blockSize = BLOCKSIZE;
   BYTE seiString[4] = {0x00, 0x01, 0x06, 0x25};
   int numOFMDs = 0;
   BYTE frameRate;
 
   filePtr = fopen(fileName, "rb");
   if (filePtr == NULL) {
-    printf("Failed to open %s.\n", fileName);
+    printf("Failed to open: %s\n", fileName);
     exit(1);
   }
   // Get the size of the file.
@@ -236,7 +246,12 @@ int getOFMDsFromFile(const char *fileName, BYTE ***OFMDs) {
         NULL) {
       // Check for nearby OFMD.
       buffer = (BYTE *)malloc(200 * sizeof(BYTE));
-      fread(buffer, 1, 200, filePtr);
+      if ((fread(buffer, 1, 200, filePtr)) == 0) {
+        checkFileError(filePtr);
+        free(buffer);
+        free2DArray((void ***)OFMDs, numOFMDs);
+        exit(1);
+      }
       if ((posPtr = my_memmem(buffer, 200, "OFMD", 4)) != NULL) {
         // Seek to OFMD
         OFMDpos = (posPtr - buffer) - 200;
@@ -249,7 +264,12 @@ int getOFMDsFromFile(const char *fileName, BYTE ***OFMDs) {
 
       // Store the OFMD's data into buffer.
       buffer = (BYTE *)malloc(4096 * sizeof(BYTE));
-      fread(buffer, 1, 4096, filePtr);
+      if ((fread(buffer, 1, 4096, filePtr)) == 0) {
+        checkFileError(filePtr);
+        free(buffer);
+        free2DArray((void ***)OFMDs, numOFMDs);
+        exit(1);
+      }
       fseeko(filePtr, -4096, SEEK_CUR);
 
       // Verify the OFMD by checking it's frame-rate value.
@@ -457,7 +477,11 @@ FILE *searchStringInFile(BYTE *small, int smallSize, int blockSize, FILE *file,
 
   // Initialize buffer.
   buffer = (BYTE *)malloc(blockSize * sizeof(BYTE));
-  fread(buffer, 1, blockSize, file);
+  if ((fread(buffer, 1, blockSize, file)) == 0) {
+    checkFileError(file);
+    free(buffer);
+    exit(1);
+  }
 
   // If we are running out of file to read, just search through the last
   // chunk of the file.
@@ -488,7 +512,11 @@ FILE *searchStringInFile(BYTE *small, int smallSize, int blockSize, FILE *file,
       // While keeping track of how big the buffer gets.
       blockSize += origBlockSize;
       buffer = (BYTE *)realloc(buffer, blockSize * sizeof(BYTE));
-      fread(buffer + origBlockSize, 1, origBlockSize, file);
+      if ((fread(buffer + origBlockSize, 1, origBlockSize, file)) == 0) {
+        checkFileError(file);
+        free(buffer);
+        exit(1);
+      }
       if (blockSize >= MAXCACHE) {
         printf("Oops! We've hit are memory limit searching for 3D Planes.\n");
         int lastBlockSizeMB = (float)blockSize / 1048576;
