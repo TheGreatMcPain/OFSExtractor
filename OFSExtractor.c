@@ -7,6 +7,16 @@
 #include <sys/stat.h>
 #include <time.h>
 
+#ifndef VERSION
+#define VERSION "1.0"
+#endif
+
+#if __x86_64__
+#define ARCH "64bit "
+#elif __i386__
+#define ARCH "32bit "
+#endif
+
 #if !_WIN32         // If we're not on windows use POSIX basename.
 #include <libgen.h> /* basename */
 #endif
@@ -34,7 +44,10 @@ struct OFMDdata {
 /*
  * Function definitions.
  */
+void parseOptions(int argc, char *argv[], BYTE *newFrameRate, BYTE *dropFrame,
+                  char **outFolder);
 int getOFMDsFromFile(const char *fileName, BYTE ***OFMDs);
+static inline off_t min(off_t x, off_t y);
 FILE *searchStringInFile(BYTE *small, int smallSize, int blockSize, FILE *file,
                          off_t fileSize);
 void getPlanesFromOFMDs(BYTE ***OFMDs, int numOFMDs, struct OFMDdata *OFMDdata,
@@ -45,8 +58,9 @@ void verifyPlanes(struct OFMDdata OFMDdata, BYTE **planes, int validPlanes[]);
 void parseDepths(BYTE *plane, int numFrames);
 void free2DArray(void ***array, int array2DSize);
 void createOFSFiles(BYTE **planes, struct OFMDdata OFMDdata, int validPlanes[],
-                    const char *outFolder);
+                    const char *outFolder, BYTE newFrameRate, BYTE dropFrame);
 void usage(int argc, char *argv[]);
+void printIntro(int argc, char *argv[]);
 
 /*
  * Start of program
@@ -54,20 +68,21 @@ void usage(int argc, char *argv[]);
 int main(int argc, char *argv[]) {
   BYTE **OFMDs;
   BYTE **planes;
+  BYTE newFrameRate;
+  BYTE dropFrame;
   struct OFMDdata OFMDdata;
   int validPlanes[MAXPLANES]; // Most BluRays have 32 planes.
   int numOFMDs;
   int numOfValidPlanes;
+  char *outFolder;
 
-  // Zero out validPlanes
-  // to prevent it from creating false ofs files.
+  // Prevent creating false ofs files.
   for (int x = 0; x < MAXPLANES; x++) {
     validPlanes[x] = 0;
   }
 
-  if (argc < 3) {
-    usage(argc, argv);
-  }
+  printIntro(argc, argv);
+  parseOptions(argc, argv, &newFrameRate, &dropFrame, &outFolder);
 
   OFMDs = (BYTE **)malloc(sizeof(BYTE *));
   numOFMDs = getOFMDsFromFile(argv[1], &OFMDs);
@@ -81,35 +96,224 @@ int main(int argc, char *argv[]) {
 
   verifyPlanes(OFMDdata, planes, validPlanes);
 
-  createOFSFiles(planes, OFMDdata, validPlanes, argv[2]);
+  createOFSFiles(planes, OFMDdata, validPlanes, outFolder, newFrameRate,
+                 dropFrame);
 
   // Don't leak memory!
   free2DArray((void ***)&planes, OFMDdata.numOfPlanes);
   free2DArray((void ***)&OFMDs, numOFMDs);
 }
 
-// Prints an array in hex.
-// For debugging REMOVE LATER
-void print_hex_memory(void *mem) {
-  int i;
-  unsigned char *p = (unsigned char *)mem;
-  for (i = 0; i < 128; i++) {
-    printf("0x%02x ", p[i]);
-    if ((i % 16 == 0) && i)
-      printf("\n");
+char *printFpsValue(int frameRate) {
+  char *fpsString;
+
+  switch (frameRate) {
+  case 1:
+    fpsString = "23.976";
+    break;
+  case 2:
+    fpsString = "24";
+    break;
+  case 3:
+    fpsString = "25";
+    break;
+  case 4:
+    fpsString = "29.97";
+    break;
+  case 6:
+    fpsString = "50";
+    break;
+  case 7:
+    fpsString = "59.94";
+    break;
+  default:
+    fpsString = "23.976";
   }
-  printf("\n");
+
+  return fpsString;
+}
+
+// Exits program if frame-rate value is invalid.
+void isValidFps(int frameRate) {
+  BYTE frameRateOption[6] = {1, 2, 3, 4, 6, 7};
+  bool validFps = false;
+  for (int x = 0; x < 6; x++) {
+    if (frameRate == frameRateOption[x]) {
+      printf("OFS Framerate will now be: %s\n\n", printFpsValue(frameRate));
+      validFps = true;
+      break;
+    }
+  }
+  if (validFps == false) {
+    printf("'-fps %d' is invalid. Value must be ", frameRate);
+    printf("between 1 and 4, 6, or 7.\n");
+    exit(1);
+  }
+}
+
+// Gets file extension from filename.
+const char *getFileExt(const char *fileName) {
+  int index = -1;
+  int i = 0;
+
+  while (fileName[i] != '\0') {
+    if (fileName[i] == '.') {
+      index = i;
+    }
+    i++;
+  }
+
+  return fileName + index + 1;
+}
+
+void parseOptions(int argc, char *argv[], BYTE *newFrameRate, BYTE *dropFrame,
+                  char **outFolder) {
+  char *supportedExt[3] = {"mvc", "h264", "m2ts"};
+  char *supportedExtUpper[3] = {"MVC", "H264", "M2TS"};
+  const char *fileExt;
+  bool validExt;
+
+  if (argc >= 2) {
+    if (strncmp(argv[1], "-license", 8) == 0) {
+      // TODO: print license
+      printf("MIT\n");
+      exit(0);
+    }
+  }
+
+  if (argc >= 2) {
+    fileExt = getFileExt(argv[1]);
+    validExt = false;
+    for (int x = 0; x < 3; x++) {
+      if (strcmp(supportedExt[x], fileExt) == 0 ||
+          strcmp(supportedExtUpper[x], fileExt) == 0) {
+        validExt = true;
+      }
+    }
+    if (!validExt) {
+      printf("'%s': Is not a supported file extention.\n", fileExt);
+      exit(1);
+    }
+  }
+
+  if (argc == 1) {
+    usage(argc, argv);
+  } else if (argc == 2) {
+    *outFolder = "."; // Output to current if option not set.
+  } else if (argc == 3) {
+    if (strncmp(argv[2], "-fps", 4) == 0) {
+      printf("'-fps' requires a value.\n");
+      exit(1);
+    } else {
+      *outFolder = argv[2]; // Set output Folder.
+    }
+  } else if (argc == 4) {
+    if (strncmp(argv[3], "-fps", 4) == 0) {
+      printf("'-fps' requires a value.\n");
+      exit(1);
+    } else if (strncmp(argv[2], "-fps", 4) == 0) {
+      sscanf(argv[3], "%d", (int *)&(*newFrameRate));
+      isValidFps(*newFrameRate);
+      *outFolder = ".";
+    } else {
+      printf("Invalid input!\n");
+      exit(1);
+    }
+  } else if (argc == 5) {
+    if (strncmp(argv[2], "-fps", 4) == 0) {
+      sscanf(argv[3], "%d", (int *)&(*newFrameRate)); // Convert to int
+      isValidFps(*newFrameRate);
+      if (strncmp(argv[4], "-dropframe", 10) == 0) {
+        if (*newFrameRate == 4) {
+          *dropFrame = 1;
+          printf("'drop_frame_flag' will be set in OFS.\n\n");
+        } else {
+          printf("'-dropframe' is only compatible with '-fps 4'.\n");
+          exit(1);
+        }
+        *outFolder = ".";
+      } else {
+        printf("Invalid input!\n");
+        exit(1);
+      }
+    } else if (strncmp(argv[3], "-fps", 4) == 0) {
+      sscanf(argv[4], "%d", (int *)&(*newFrameRate)); // Convert to int
+      isValidFps(*newFrameRate);
+      *outFolder = argv[2];
+    } else {
+      printf("Invalid input!\n");
+      exit(1);
+    }
+  } else if (argc == 6) {
+    if (strncmp(argv[3], "-fps", 4) == 0) {
+      sscanf(argv[4], "%d", (int *)&(*newFrameRate));
+      isValidFps(*newFrameRate);
+      if (strncmp(argv[5], "-dropframe", 10) == 0) {
+        if (*newFrameRate == 4) {
+          *dropFrame = 1;
+          printf("'drop_frame_flag' will be set in OFS.\n\n");
+        } else {
+          printf("'-dropframe' is only compatible with '-fps 4'.\n");
+          exit(1);
+        }
+      } else {
+        printf("Invalid input!\n");
+        exit(1);
+      }
+      *outFolder = argv[2];
+    } else {
+      printf("Invalid input!\n");
+      exit(1);
+    }
+  }
+}
+
+void printIntro(int argc, char *argv[]) {
+  char *program = basename(argv[0]);
+
+  // Print version info, and 'arch'.
+  printf("OFSExtractor %s %sby TheGreatMcPain (aka Sixsupersonic on doom9)\n",
+         VERSION, ARCH);
+#ifndef DATE // Set compile date. (Might change this to git commit date.)
+  printf("This program was compiled on %s %s.\n", __DATE__, __TIME__);
+#else
+  printf("This program was compiled on %s.\n\n", DATE);
+#endif
 }
 
 void usage(int argc, char *argv[]) {
   char *program = basename(argv[0]);
 
-  printf("Usage: %s <input.mvc> <output folder>\n", program);
+  printf("Usage: %s [-license] <input file> <output folder> [-fps # "
+         "-dropframe] \n\n",
+         program);
+  printf("  -license : Print license information (MIT).\n\n");
+  printf("  <input file> : Can be a raw MVC file, ");
+  printf("a H264+MVC combined from MakeMKV,\n");
+  printf("                 or an M2TS. M2TS is not supported, and could cause "
+         "burnt toast.)\n\n");
+  printf("  <output folder> : The output folder which will the ofs files.\n");
+  printf("                    If empty the current directory will be used\n\n");
+  printf("Advanced Options: Use with care!\n\n");
+  printf("  -fps # : Must be value between 1 and 4, 6, or 7. See Table.\n");
+  printf("           This will override the fps value that would normally come "
+         "from the MVC stream.\n");
+  printf("           See conversion table below.\n\n");
+  printf("           FPS Conversion Table:\n");
+  printf("           1 : 23.976 fps\n");
+  printf("           2 : 24 fps\n");
+  printf("           3 : 25 fps\n");
+  printf("           4 : 29.97 fps\n");
+  printf("           6 : 50 fps\n");
+  printf("           7 : 59.94 fps\n\n");
+  printf(
+      "  -dropframe : Set drop_frame_flag within the resulting OFS files.\n");
+  printf("               Can only be used with FPS value 4.\n\n");
   exit(0);
 }
 
 void createOFSFiles(BYTE **planes, struct OFMDdata OFMDdata, int validPlanes[],
-                    const char *outFolder) {
+                    const char *outFolder, BYTE newFrameRate, BYTE dropFrame) {
   FILE *ofsFile;
   char ofsName[80];   // Store the name of the ofs file.
   char outFile[4096]; // will become what's used with fopen.
@@ -120,16 +324,13 @@ void createOFSFiles(BYTE **planes, struct OFMDdata OFMDdata, int validPlanes[],
   BYTE version[4] = {0x30, 0x31, 0x30, 0x30};
   BYTE GUID[16];
   BYTE frameRate;
-  BYTE dropframe = 0;
   BYTE rollsAndReserved[4] = {0x01, 0x00, 0x00, 0x00};
   BYTE timecode[4] = {0x00, 0x00, 0x00, 0x00};
   BYTE frameArray[4] = {0x00, 0x00, 0x00, 0x00};
   srand(time(NULL));
   struct stat sb;
 
-  if (stat(outFolder, &sb) == 0 && S_ISDIR(sb.st_mode)) {
-    printf("Output folder exists!.\n");
-  } else {
+  if (!(stat(outFolder, &sb) == 0) && !S_ISDIR(sb.st_mode)) {
 #ifdef _WIN32 // Windows uses a different mkdir.
     _mkdir(outFolder);
 #else
@@ -156,7 +357,11 @@ void createOFSFiles(BYTE **planes, struct OFMDdata OFMDdata, int validPlanes[],
   frameArray[0] = (OFMDdata.totalFrames >> 24) % 256;
 
   // Calculate the framerate value.
-  frameRate = (OFMDdata.frameRate * 16) + dropframe;
+  if (newFrameRate == 0) {
+    frameRate = (OFMDdata.frameRate * 16) + dropFrame;
+  } else {
+    frameRate = (newFrameRate * 16) + dropFrame;
+  }
 
   for (int plane = 0; plane < OFMDdata.numOfPlanes; plane++) {
     if (validPlanes[plane] == 1) {
