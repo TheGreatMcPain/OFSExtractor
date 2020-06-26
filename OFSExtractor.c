@@ -55,7 +55,7 @@ void getPlanesFromOFMDs(BYTE ***OFMDs, int numOFMDs, struct OFMDdata *OFMDdata,
 void *my_memmem(const void *haystack, size_t haystacklen, const void *needle,
                 size_t needlelen);
 void verifyPlanes(struct OFMDdata OFMDdata, BYTE **planes, int validPlanes[]);
-void parseDepths(BYTE *plane, int numFrames);
+void parseDepths(int planeNum, int numOfPlanes, BYTE **planes, int numFrames);
 void free2DArray(void ***array, int array2DSize);
 void createOFSFiles(BYTE **planes, struct OFMDdata OFMDdata, int validPlanes[],
                     const char *outFolder, BYTE newFrameRate, BYTE dropFrame);
@@ -596,17 +596,42 @@ void verifyPlanes(struct OFMDdata OFMDdata, BYTE **planes, int validPlanes[]) {
 
     if (thereArePlanes) {
       printf("\n");
-      printf("3D-Plane #%d\n", x);
-      parseDepths(planes[x], totalFrames);
+      printf("3D-Plane #%02d\n", x);
+      parseDepths(x, numOfPlanes, planes, totalFrames);
     } else {
       printf("\n");
-      printf("3D-Plane #%d is Empty!\n", x);
+      printf("3D-Plane #%02d is Empty!\n", x);
     }
   }
 }
 
+void compareDepths(int planeNum, int numOfPlanes, int totalFrames,
+                   BYTE **planes) {
+  char printString[80] = "Identical Planes:";
+  char samePlaneStr[10];
+  bool samePlane = false;
+
+  for (int x = 0; x < numOfPlanes; x++) {
+    if (memcmp(planes[planeNum], planes[x], totalFrames) == 0) {
+      if (x != planeNum) {
+        sprintf(samePlaneStr, " #%02d", x);
+        strcat(printString, samePlaneStr);
+        samePlane = true;
+      }
+    }
+  }
+
+  if (samePlane) {
+    printf("%s\n", printString);
+  } else {
+    strcat(printString, " None");
+    printf("%s\n", printString);
+  }
+}
+
 // Prints information about the 3D-Plane.
-void parseDepths(BYTE *plane, int numFrames) {
+void parseDepths(int planeNum, int numOfPlanes, BYTE **planes, int numFrames) {
+  BYTE *plane = planes[planeNum];
   int minval = 128;
   int maxval = -128;
   int total = 0;
@@ -656,8 +681,9 @@ void parseDepths(BYTE *plane, int numFrames) {
   printf("First frame with a defined depth: %d\n", firstframe);
   printf("Last frame with a defined depth: %d\n", lastframe);
   printf("Undefined: %d\n", undefined);
+  compareDepths(planeNum, numOfPlanes, numFrames, planes);
   if (minval == maxval) {
-    printf("*** Warning This 3D-Plane has a fixed depth of minval! ***");
+    printf("*** Warning This 3D-Plane has a fixed depth of %d! ***\n", minval);
   }
 }
 
