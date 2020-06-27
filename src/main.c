@@ -271,17 +271,18 @@ void usage(char *argv[]) {
          "-dropframe] \n\n",
          program);
   printf("  -license : Print license (MIT).\n\n");
-  printf("  <input file> : Can be a raw MVC file, ");
-  printf("a H264+MVC combined from MakeMKV,\n");
-  printf("                 or an M2TS. M2TS is not supported, and could cause "
-         "burnt toast.)\n\n");
-  printf("  <output folder> : The output folder which will the ofs files.\n");
-  printf("                    If empty the current directory will be used\n\n");
+  printf("  <input file> : Can be a raw MVC stream, ");
+  printf("a H264+MVC combined stream (like those from MakeMKV),\n");
+  printf("                 or a M2TS file. (M2TS is not fully supported, and "
+         "could burn your toast.)\n\n");
+  printf("  <output folder> : The output folder which will contain the ofs "
+         "files.\n");
+  printf("                    If undefined the current directory will be "
+         "used.\n\n");
   printf("Advanced Options: Use with care!\n\n");
   printf("  -fps # : Must be value between 1 and 4, 6, or 7. See Table.\n");
   printf("           This will override the fps value that would normally come "
-         "from the MVC stream.\n");
-  printf("           See conversion table below.\n\n");
+         "from the MVC stream.\n\n");
   printf("           FPS Conversion Table:\n");
   printf("           1 : 23.976 fps\n");
   printf("           2 : 24 fps\n");

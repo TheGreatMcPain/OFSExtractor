@@ -92,7 +92,7 @@ int getOFMDsFromFile(const char *fileName, BYTE ***OFMDs) {
 
       // Verify the OFMD by checking it's frame-rate value.
       frameRate = buffer[4] & 15;
-      if (frameRate >= 1 && frameRate <= 7) {
+      if (frameRate >= 1 && frameRate <= 7 && frameRate != 5) {
         // If the OFMD is valid create a new pointer to store it's data.
         *OFMDs = (BYTE **)realloc(*OFMDs, (numOFMDs + 1) * sizeof(BYTE *));
         (*OFMDs)[numOFMDs] = buffer;
@@ -208,7 +208,7 @@ int verifyPlanes(struct OFMDdata OFMDdata, BYTE **planes, int validPlanes[],
 void compareDepths(int planeNum, int numOfPlanes, int totalFrames,
                    BYTE **planes) {
   char printString[80] = "Identical Planes:";
-  char samePlaneStr[10];
+  char samePlaneStr[25];
   bool samePlane = false;
 
   for (int x = 0; x < numOfPlanes; x++) {
