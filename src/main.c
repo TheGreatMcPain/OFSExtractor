@@ -1,3 +1,26 @@
+/*
+ * MIT License
+ *
+ * Copyright (c) 2020 James McClain
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
 #define _FILE_OFFSET_BITS 64
 #include <stdbool.h>
 #include <stdio.h>
@@ -20,6 +43,7 @@
 
 void parseOptions(int argc, char *argv[], BYTE *newFrameRate, BYTE *dropFrame,
                   char **outFolder);
+void printLicense();
 void usage(char *argv[]);
 void printIntro();
 char *printFpsValue(int frameRate);
@@ -137,8 +161,7 @@ void parseOptions(int argc, char *argv[], BYTE *newFrameRate, BYTE *dropFrame,
 
   if (argc >= 2) {
     if (strncmp(argv[1], "-license", 8) == 0) {
-      // TODO: print license
-      printf("MIT\n");
+      printLicense();
       exit(0);
     }
   }
@@ -270,4 +293,39 @@ void usage(char *argv[]) {
       "  -dropframe : Set drop_frame_flag within the resulting OFS files.\n");
   printf("               Can only be used with FPS value 4.\n\n");
   exit(0);
+}
+
+void printLicense() {
+  printf("MIT License\n\n");
+  printf("Copyright (c) 2020 James McClain\n\n");
+
+  printf("Permission is hereby granted, free of charge, to any person "
+         "obtaining a copy\n");
+  printf("of this software and associated documentation files (the "
+         "\"Software\"), to deal\n");
+  printf("in the Software without restriction, including without limitation "
+         "the rights\n");
+  printf("to use, copy, modify, merge, publish, distribute, sublicense, and/or "
+         "sell\n");
+  printf("copies of the Software, and to permit persons to whom the Software "
+         "is\n");
+  printf("furnished to do so, subject to the following conditions:\n\n");
+
+  printf("The above copyright notice and this permission notice shall be "
+         "included in\n");
+  printf("all copies or substantial portions of the Software.\n\n");
+
+  printf("THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, "
+         "EXPRESS OR\n");
+  printf("IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF "
+         "MERCHANTABILITY,\n");
+  printf("FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT "
+         "SHALL THE\n");
+  printf("AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR "
+         "OTHER\n");
+  printf("LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, "
+         "ARISING FROM,\n");
+  printf("OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER "
+         "DEALINGS IN THE\n");
+  printf("SOFTWARE.\n\n");
 }
