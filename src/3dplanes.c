@@ -1,6 +1,4 @@
 #define _FILE_OFFSET_BITS 64
-#include "3dplanes.h"
-#include "util.h"
 #include <math.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -8,6 +6,9 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <time.h>
+
+#include <3dplanes.h>
+#include <util.h>
 
 #if _WIN32
 #include <direct.h>
@@ -148,7 +149,6 @@ void getPlanesFromOFMDs(BYTE ***OFMDs, int numOFMDs, struct OFMDdata *OFMDdata,
 // valid.
 int verifyPlanes(struct OFMDdata OFMDdata, BYTE **planes, int validPlanes[],
                  char *inFile) {
-  int frameRate = OFMDdata.frameRate;
   int numOfPlanes = OFMDdata.numOfPlanes;
   int totalFrames = OFMDdata.totalFrames;
   int planesInFile = 0;

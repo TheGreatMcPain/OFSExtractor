@@ -4,8 +4,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "3dplanes.h"
-#include "util.h"
+#include <3dplanes.h>
+#include <compiledate.h>
+#include <util.h>
 
 #ifndef VERSION
 #define VERSION "1.0"
@@ -19,8 +20,8 @@
 
 void parseOptions(int argc, char *argv[], BYTE *newFrameRate, BYTE *dropFrame,
                   char **outFolder);
-void usage(int argc, char *argv[]);
-void printIntro(int argc, char *argv[]);
+void usage(char *argv[]);
+void printIntro();
 char *printFpsValue(int frameRate);
 
 int main(int argc, char *argv[]) {
@@ -31,9 +32,8 @@ int main(int argc, char *argv[]) {
   struct OFMDdata OFMDdata;
   int validPlanes[MAXPLANES]; // Most BluRays have 32 planes.
   int planesInFile;
-  int planesWritten;
+  int planesWritten = 0;
   int numOFMDs;
-  int numOfValidPlanes;
   char *outFolder;
 
   // Prevent creating false ofs files.
@@ -41,10 +41,10 @@ int main(int argc, char *argv[]) {
     validPlanes[x] = 0;
   }
 
-  printIntro(argc, argv);
+  printIntro();
   parseOptions(argc, argv, &newFrameRate, &dropFrame, &outFolder);
 
-  if (newFrameRate >= 0) {
+  if (newFrameRate > 0) {
     OFMDdata.frameRate = newFrameRate;
   }
 
@@ -67,7 +67,7 @@ int main(int argc, char *argv[]) {
 
   for (int x = 0; x < MAXPLANES; x++) {
     if (validPlanes[x] == 1) {
-      numOfValidPlanes++;
+      planesWritten++;
     }
   }
 
@@ -76,7 +76,7 @@ int main(int argc, char *argv[]) {
   free2DArray((void ***)&OFMDs, numOFMDs);
 
   printf("\nNumber of 3D-Planes in MVC stream: %d\n", planesInFile);
-  printf("Number of 3D-Planes written: %d\n", numOfValidPlanes);
+  printf("Number of 3D-Planes written: %d\n", planesWritten);
   printf("Number of frames: %d\n", OFMDdata.totalFrames);
   printf("Framerate: %s\n\n", printFpsValue(OFMDdata.frameRate));
 }
@@ -159,7 +159,7 @@ void parseOptions(int argc, char *argv[], BYTE *newFrameRate, BYTE *dropFrame,
   }
 
   if (argc == 1) {
-    usage(argc, argv);
+    usage(argv);
   } else if (argc == 2) {
     *outFolder = "."; // Output to current if option not set.
   } else if (argc == 3) {
@@ -230,9 +230,7 @@ void parseOptions(int argc, char *argv[], BYTE *newFrameRate, BYTE *dropFrame,
   }
 }
 
-void printIntro(int argc, char *argv[]) {
-  char *program = basename(argv[0]);
-
+void printIntro() {
   // Print version info, and 'arch'.
   printf("OFSExtractor %s %sby TheGreatMcPain (aka Sixsupersonic on doom9)\n",
          VERSION, ARCH);
@@ -243,7 +241,7 @@ void printIntro(int argc, char *argv[]) {
 #endif
 }
 
-void usage(int argc, char *argv[]) {
+void usage(char *argv[]) {
   char *program = basename(argv[0]);
 
   printf("Usage: %s [-license] <input file> <output folder> [-fps # "

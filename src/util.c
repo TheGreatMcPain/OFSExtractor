@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "util.h"
+#include <util.h>
 
 // From: https://stackoverflow.com/a/46156986/13793328
 // Returns the smallest of two numbers.
