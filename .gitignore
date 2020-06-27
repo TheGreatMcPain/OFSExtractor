@@ -4,3 +4,5 @@
 *.exe
 a.out
 OFSExtractor
+compile_commands.json
+.clangd
