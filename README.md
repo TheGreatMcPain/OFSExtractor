@@ -14,10 +14,8 @@ $ OFSExtractor [-license] <input file> <output folder> [-fps # -dropframe]
 | Option | Description |
 | ------ | ----------- |
 | `-license` | Prints the license. |
-| `<input file>` | Can be a raw MVC stream, a H264+MVC combined stream (like those from MakeMKV)\
-or a M2TS file. (M2TS is not fully supported, and could burn your toast.) |
-| `<output folder>` | The output folder which will contain the OFS files.\
-If undefined the current directory will be used. |
+| `<input file>` | Can be a raw MVC stream, a H264+MVC combined stream (like those from MakeMKV) or a M2TS file. (M2TS is not fully supported, and could burn your toast.) |
+| `<output folder>` | The output folder which will contain the OFS files. If undefined the current directory will be used. |
 
 ### Advanced Options: Use with care!
 
