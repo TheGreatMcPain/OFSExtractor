@@ -54,14 +54,15 @@ void getPlanesFromOFMDs(BYTE ***OFMDs, int numOFMDs, struct OFMDdata *OFMDdata,
                         BYTE ***planes);
 void *my_memmem(const void *haystack, size_t haystacklen, const void *needle,
                 size_t needlelen);
-void verifyPlanes(struct OFMDdata OFMDdata, BYTE **planes, int validPlanes[],
-                  char *inFile);
+int verifyPlanes(struct OFMDdata OFMDdata, BYTE **planes, int validPlanes[],
+                 char *inFile);
 void parseDepths(int planeNum, int numOfPlanes, BYTE **planes, int numFrames);
 void free2DArray(void ***array, int array2DSize);
 void createOFSFiles(BYTE **planes, struct OFMDdata OFMDdata, int validPlanes[],
-                    const char *outFolder, BYTE newFrameRate, BYTE dropFrame);
+                    const char *outFolder, BYTE dropFrame);
 void usage(int argc, char *argv[]);
 void printIntro(int argc, char *argv[]);
+char *printFpsValue(int frameRate);
 
 /*
  * Start of program
@@ -69,10 +70,12 @@ void printIntro(int argc, char *argv[]);
 int main(int argc, char *argv[]) {
   BYTE **OFMDs;
   BYTE **planes;
-  BYTE newFrameRate;
-  BYTE dropFrame;
+  BYTE newFrameRate = 0;
+  BYTE dropFrame = 0;
   struct OFMDdata OFMDdata;
   int validPlanes[MAXPLANES]; // Most BluRays have 32 planes.
+  int planesInFile;
+  int planesWritten;
   int numOFMDs;
   int numOfValidPlanes;
   char *outFolder;
@@ -85,6 +88,12 @@ int main(int argc, char *argv[]) {
   printIntro(argc, argv);
   parseOptions(argc, argv, &newFrameRate, &dropFrame, &outFolder);
 
+  if (newFrameRate >= 0) {
+    OFMDdata.frameRate = newFrameRate;
+  }
+
+  printf("Searching file for 3D-Planes.\n\n");
+
   OFMDs = (BYTE **)malloc(sizeof(BYTE *));
   numOFMDs = getOFMDsFromFile(argv[1], &OFMDs);
 
@@ -95,14 +104,25 @@ int main(int argc, char *argv[]) {
 
   getPlanesFromOFMDs(&OFMDs, numOFMDs, &OFMDdata, &planes);
 
-  verifyPlanes(OFMDdata, planes, validPlanes, argv[1]);
+  printf("\nChecking 3D-Planes for valid depth values.\n");
 
-  createOFSFiles(planes, OFMDdata, validPlanes, outFolder, newFrameRate,
-                 dropFrame);
+  planesInFile = verifyPlanes(OFMDdata, planes, validPlanes, argv[1]);
+  createOFSFiles(planes, OFMDdata, validPlanes, outFolder, dropFrame);
+
+  for (int x = 0; x < MAXPLANES; x++) {
+    if (validPlanes[x] == 1) {
+      numOfValidPlanes++;
+    }
+  }
 
   // Don't leak memory!
   free2DArray((void ***)&planes, OFMDdata.numOfPlanes);
   free2DArray((void ***)&OFMDs, numOFMDs);
+
+  printf("\nNumber of 3D-Planes in MVC stream: %d\n", planesInFile);
+  printf("Number of 3D-Planes written: %d\n", numOfValidPlanes);
+  printf("Number of frames: %d\n", OFMDdata.totalFrames);
+  printf("Framerate: %s\n\n", printFpsValue(OFMDdata.frameRate));
 }
 
 char *printFpsValue(int frameRate) {
@@ -314,7 +334,7 @@ void usage(int argc, char *argv[]) {
 }
 
 void createOFSFiles(BYTE **planes, struct OFMDdata OFMDdata, int validPlanes[],
-                    const char *outFolder, BYTE newFrameRate, BYTE dropFrame) {
+                    const char *outFolder, BYTE dropFrame) {
   FILE *ofsFile;
   char ofsName[80];   // Store the name of the ofs file.
   char outFile[4096]; // will become what's used with fopen.
@@ -358,11 +378,7 @@ void createOFSFiles(BYTE **planes, struct OFMDdata OFMDdata, int validPlanes[],
   frameArray[0] = (OFMDdata.totalFrames >> 24) % 256;
 
   // Calculate the framerate value.
-  if (newFrameRate == 0) {
-    frameRate = (OFMDdata.frameRate * 16) + dropFrame;
-  } else {
-    frameRate = (newFrameRate * 16) + dropFrame;
-  }
+  frameRate = (OFMDdata.frameRate * 16) + dropFrame;
 
   for (int plane = 0; plane < OFMDdata.numOfPlanes; plane++) {
     if (validPlanes[plane] == 1) {
@@ -558,11 +574,12 @@ void getPlanesFromOFMDs(BYTE ***OFMDs, int numOFMDs, struct OFMDdata *OFMDdata,
 
 // Verifies each 3D-Plane, and modifies an array containing which planes are
 // valid.
-void verifyPlanes(struct OFMDdata OFMDdata, BYTE **planes, int validPlanes[],
-                  char *inFile) {
+int verifyPlanes(struct OFMDdata OFMDdata, BYTE **planes, int validPlanes[],
+                 char *inFile) {
   int frameRate = OFMDdata.frameRate;
   int numOfPlanes = OFMDdata.numOfPlanes;
   int totalFrames = OFMDdata.totalFrames;
+  int planesInFile = 0;
   const char *fileExt = getFileExt(inFile);
   float fps;
 
@@ -603,14 +620,17 @@ void verifyPlanes(struct OFMDdata OFMDdata, BYTE **planes, int validPlanes[],
       parseDepths(x, numOfPlanes, planes, totalFrames);
     } else {
       printf("\n");
-      printf("3D-Plane #%02d is Empty!\n", x);
+      printf("3D-Plane #%02d is empty.\n", x);
       if (strncmp(fileExt, "m2ts", 4) == 0 ||
           strncmp(fileExt, "M2TS", 4) == 0) {
         printf("\nStopping here because input file is M2TS.\n");
         break;
       }
     }
+    planesInFile++;
   }
+
+  return planesInFile;
 }
 
 void compareDepths(int planeNum, int numOfPlanes, int totalFrames,
@@ -688,7 +708,7 @@ void parseDepths(int planeNum, int numOfPlanes, BYTE **planes, int numFrames) {
   printf("Number of changes of depth value: %d\n", cuts);
   printf("First frame with a defined depth: %d\n", firstframe);
   printf("Last frame with a defined depth: %d\n", lastframe);
-  printf("Undefined: %d\n", undefined);
+  printf("Number of frames with undefined depth: %d\n", undefined);
   compareDepths(planeNum, numOfPlanes, numFrames, planes);
   if (minval == maxval) {
     printf("*** Warning This 3D-Plane has a fixed depth of %d! ***\n", minval);
