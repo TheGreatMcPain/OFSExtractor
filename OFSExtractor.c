@@ -165,7 +165,7 @@ void isValidFps(int frameRate) {
       break;
     }
   }
-  if (validFps == false) {
+  if (!validFps) {
     printf("'-fps %d' is invalid. Value must be ", frameRate);
     printf("between 1 and 4, 6, or 7.\n");
     exit(1);
@@ -457,6 +457,7 @@ int getOFMDsFromFile(const char *fileName, BYTE ***OFMDs) {
     printf("Failed to open: %s\n", fileName);
     exit(1);
   }
+
   // Get the size of the file.
   fseeko(filePtr, 0, SEEK_END);
   off_t fileSize = ftello(filePtr);
@@ -478,7 +479,6 @@ int getOFMDsFromFile(const char *fileName, BYTE ***OFMDs) {
         // Seek to OFMD
         OFMDpos = (posPtr - buffer) - 200;
         fseeko(filePtr, OFMDpos, SEEK_CUR);
-        // printf("%ld\n", OFMDpos);
       } else {
         free(buffer);
         continue;
@@ -581,29 +581,6 @@ int verifyPlanes(struct OFMDdata OFMDdata, BYTE **planes, int validPlanes[],
   int totalFrames = OFMDdata.totalFrames;
   int planesInFile = 0;
   const char *fileExt = getFileExt(inFile);
-  float fps;
-
-  switch (frameRate) {
-  case 1:
-    fps = 23.976;
-    break;
-  case 2:
-    fps = 24;
-    break;
-  case 3:
-    fps = 25;
-    break;
-  case 4:
-    fps = 29.97;
-  case 6:
-    fps = 50;
-    break;
-  case 7:
-    fps = 60;
-    break;
-  default:
-    printf("FrameRate is invalid\n");
-  }
 
   for (int x = 0; x < numOfPlanes; x++) {
     bool thereArePlanes = false;
