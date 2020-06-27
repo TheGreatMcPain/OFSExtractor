@@ -308,7 +308,7 @@ void usage(int argc, char *argv[]) {
   printf("Usage: %s [-license] <input file> <output folder> [-fps # "
          "-dropframe] \n\n",
          program);
-  printf("  -license : Print license information (MIT).\n\n");
+  printf("  -license : Print license (MIT).\n\n");
   printf("  <input file> : Can be a raw MVC file, ");
   printf("a H264+MVC combined from MakeMKV,\n");
   printf("                 or an M2TS. M2TS is not supported, and could cause "

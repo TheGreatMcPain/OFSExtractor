@@ -1,4 +1,6 @@
 *.mvc
+*.h264
+*.m2ts
 *.exe
 a.out
 OFSExtractor
