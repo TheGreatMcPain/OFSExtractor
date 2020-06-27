@@ -14,8 +14,23 @@ configure_file(
     configuration : cdata
 )
 
+cpu_family = target_machine.cpu_family()
+system = target_machine.system()
+
+if system == 'windows'
+    if cpu_family == 'x86'
+        binary_name = meson.project_name() + '32'
+    endif
+    
+    if cpu_family == 'x86_64'
+        binary_name = meson.project_name() + '64'
+    endif
+else
+    binary_name = meson.project_name()
+endif
+
 executable(
-    meson.project_name(),
+    binary_name,
 
     'src/main.c',
     'src/util.c',
@@ -27,4 +42,3 @@ executable(
 
     install: true
 )
-
