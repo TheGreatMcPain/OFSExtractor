@@ -1,0 +1,3 @@
+[submodule "submodules/byteshift_strstr"]
+	path = submodules/byteshift_strstr
+	url = https://github.com/TheGreatMcPain/byteshift_strstr
