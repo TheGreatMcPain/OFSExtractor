@@ -1,3 +1,4 @@
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -5,7 +6,7 @@
 #include <unistd.h>
 
 // 64 Kilobytes IEC seems to be the best from my minor testing.
-#define BUFFER_SIZE 1024 * 64
+#define BUFFER_SIZE (1024 * 64)
 
 int getOFMDsInFile(size_t storeSize, size_t bufferSize, const char *filename,
                    unsigned char ***OFMDs);
@@ -48,7 +49,6 @@ int main(int argc, const char **argv) {
  */
 int getOFMDsInFile(size_t storeSize, size_t bufferSize, const char *filename,
                    unsigned char ***OFMDs) {
-
   unsigned char seiString[4] = {0x00, 0x01, 0x06, 0x25};
   int seiSize = 4;
   int frameRate = 0;
@@ -60,8 +60,12 @@ int getOFMDsInFile(size_t storeSize, size_t bufferSize, const char *filename,
   off_t matchPos = 0;
   off_t fileSize = 0;
 
+  size_t fileRead = 0;
+  size_t origBufferSize = bufferSize;
   int numOfBuffers = 0;
-  unsigned char buffer[bufferSize];
+  // unsigned char buffer[bufferSize];
+  unsigned char *buffer = (unsigned char *)malloc(sizeByte * bufferSize);
+  unsigned char *bufferPtr = buffer;
 
   int progress = 0;
   int timeoutCounter = time(NULL);
@@ -83,52 +87,75 @@ int getOFMDsInFile(size_t storeSize, size_t bufferSize, const char *filename,
     // bufferSize.
     memmove(buffer, buffer + (bufferSize / 2), (bufferSize / 2) * sizeByte);
     fread(buffer + (bufferSize / 2), sizeByte, (bufferSize / 2), filePtr);
+    // Stop if timeout reached.
     if ((timeoutCounter - time(NULL)) > timeout) {
       fprintf(stderr, "SEI couldn't be found within %d seconds.\n", timeout);
       return 1;
     }
   }
 
-  while (match != NULL) {
-    // Make match the start of buffer, then fill the rest of the buffer.
-    matchPos = (match - buffer);
-    memmove(buffer, match, (bufferSize - matchPos));
-    fread(buffer + (bufferSize - matchPos), sizeByte, matchPos, filePtr);
+  while ((match = my_memmem(bufferPtr, bufferSize, seiString, seiSize)) !=
+         NULL) {
+    // Make match the start of buffer
+    matchPos = (match - bufferPtr);
+    bufferSize -= matchPos;
+    bufferPtr = match;
+
+    // if bufferSize is too small read more data
+    if ((storeSize * 2) > bufferSize) {
+      memmove(buffer, bufferPtr, bufferSize);
+      fileRead = fread(buffer + bufferSize, sizeByte,
+                       origBufferSize - bufferSize, filePtr);
+      bufferSize += fileRead;
+      bufferPtr = buffer;
+    }
 
     // Search for OFMD within the next 200 bytes from the seiString.
-    match = my_memmem(buffer, 200, "OFMD", 4);
+    match = my_memmem(bufferPtr, 200, "OFMD", 4);
     if (match != NULL) {
       // Move OFMD to start of buffer.
-      matchPos = (match - buffer);
-      memmove(buffer, match, (bufferSize - matchPos));
-      fread(buffer + (bufferSize - matchPos), sizeByte, matchPos, filePtr);
+      matchPos = (match - bufferPtr);
+      bufferSize -= matchPos;
+      bufferPtr = match;
 
       // Make sure the OFMD is valid before loading it into the OFMDs.
-      frameRate = buffer[4] & 15;
+      frameRate = bufferPtr[4] & 15;
       if (frameRate >= 1 && frameRate <= 7 && frameRate != 5) {
         // Make room to store data into 2D array.
         *OFMDs =
             (unsigned char **)realloc(*OFMDs, sizeBypePtr * (numOfBuffers + 1));
         (*OFMDs)[numOfBuffers] = (unsigned char *)malloc(sizeByte * storeSize);
         // Copy the data to OFMDs.
-        memcpy((*OFMDs)[numOfBuffers++], buffer, storeSize);
+        memcpy((*OFMDs)[numOfBuffers++], bufferPtr, storeSize);
       }
     } else {
       // Skip if the OFMD is not valid.
-      memmove(buffer, buffer + 200, bufferSize - 200);
-      fread(buffer + (bufferSize - 200), sizeByte, 200, filePtr);
+      bufferSize -= 200;
+      bufferPtr += 200;
+    }
+
+    // If the next seiString can't be found.
+    // Fill buffer, and search for the next seiString.
+    if ((match = my_memmem(bufferPtr, bufferSize, seiString, seiSize)) ==
+        NULL) {
+      memmove(buffer, bufferPtr, bufferSize);
+      fileRead = fread(buffer + bufferSize, sizeByte,
+                       origBufferSize - bufferSize, filePtr);
+      bufferSize += fileRead;
+      bufferPtr = buffer;
     }
 
     timeoutCounter = time(NULL);
-    while ((match = my_memmem(buffer, bufferSize, seiString, seiSize)) ==
+    while ((match = my_memmem(bufferPtr, bufferSize, seiString, seiSize)) ==
            NULL) {
+      // Shift buffer by (bufferSize - (seiSize - 1))
+      memmove(buffer, buffer + (bufferSize - (seiSize - 1)), (seiSize - 1));
+      fileRead = fread(buffer + (seiSize - 1), sizeByte,
+                       bufferSize - (seiSize - 1), filePtr);
       if (feof(filePtr)) {
         break;
       }
-      // If no seiString was found. Just shift the buffer by half the
-      // bufferSize.
-      memmove(buffer, buffer + (bufferSize / 2), (bufferSize / 2) * sizeByte);
-      fread(buffer + (bufferSize / 2), sizeByte, (bufferSize / 2), filePtr);
+      // Stop if timeout reached.
       if ((timeoutCounter - time(NULL)) > timeout) {
         fprintf(stderr, "SEI couldn't be found within %d seconds.\n", timeout);
         return 1;
