@@ -22,6 +22,7 @@
  * SOFTWARE.
  */
 #define _FILE_OFFSET_BITS 64
+#include <ctype.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -82,6 +83,11 @@ int main(int argc, char *argv[]) {
 
   OFMDs = (BYTE **)malloc(sizeof(BYTE *));
   numOFMDs = getOFMDsInFile(OFMD_SIZE, BUFFER_SIZE, argv[1], &OFMDs);
+
+  // if 'getOFMDsInFile' returns -1 it failed to open input file.
+  if (numOFMDs == -1) {
+    exit(1);
+  }
 
   if (numOFMDs == 0) {
     printf("This file doesn't have any 3D-Planes.\n");
@@ -158,12 +164,31 @@ void isValidFps(int frameRate) {
   }
 }
 
+// Helper function for 'parseOptions'
+bool checkFileExt(const char **validExts, size_t validExtsSize,
+                  const char *inExt) {
+  char lowerExt[5] = "\0"; // Will increase this if need be.
+  size_t x;
+
+  // Make inExt lowercase.
+  for (x = 0; x < strlen(inExt); x++) {
+    lowerExt[x] = tolower(inExt[x]);
+  }
+
+  // compare with validExt
+  for (x = 0; x < validExtsSize; x++) {
+    if (strcmp(validExts[x], lowerExt) == 0) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 void parseOptions(int argc, char *argv[], BYTE *newFrameRate, BYTE *dropFrame,
                   char **outFolder) {
-  char *supportedExt[3] = {"mvc", "h264", "m2ts"};
-  char *supportedExtUpper[3] = {"MVC", "H264", "M2TS"};
+  char *supportedExt[4] = {"mvc", "h264", "264", "m2ts"};
   const char *fileExt;
-  bool validExt;
 
   if (argc >= 2) {
     if (strncmp(argv[1], "-license", 8) == 0) {
@@ -174,16 +199,15 @@ void parseOptions(int argc, char *argv[], BYTE *newFrameRate, BYTE *dropFrame,
 
   if (argc >= 2) {
     if ((strlen(argv[1]) != 1) && (strncmp(argv[1], "-", 1) != 0)) {
-      fileExt = getFileExt(argv[1]);
-      validExt = false;
-      for (int x = 0; x < 3; x++) {
-        if (strcmp(supportedExt[x], fileExt) == 0 ||
-            strcmp(supportedExtUpper[x], fileExt) == 0) {
-          validExt = true;
+      if (testOpenReadFile(argv[1])) {
+        // Check if file extention is supported.
+        fileExt = getFileExt(argv[1]);
+        if (!checkFileExt((const char **)supportedExt, 4, fileExt)) {
+          printf("'%s': Is not a supported file extention.\n", fileExt);
+          exit(1);
         }
-      }
-      if (!validExt) {
-        printf("'%s': Is not a supported file extention.\n", fileExt);
+      } else {
+        // Exit if input file can't be opened.
         exit(1);
       }
     }
