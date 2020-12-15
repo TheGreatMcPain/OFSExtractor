@@ -62,34 +62,44 @@ int main(int argc, const char **argv) {
  */
 int getOFMDsInFile(size_t storeSize, size_t bufferSize, const char *filename,
                    unsigned char ***OFMDs) {
-  unsigned char seiString[4] = {0x00, 0x01, 0x06, 0x25};
-  int seiSize = 4;
+  const size_t sizeByte = sizeof(unsigned char);
+  const size_t sizeBypePtr = sizeof(unsigned char *);
+  const size_t OFMDSearchSize = 400;
   int frameRate = 0;
+  int OFMDCounter = 0;
 
-  size_t sizeByte = sizeof(unsigned char);
-  size_t sizeBypePtr = sizeof(unsigned char *);
+  const unsigned char seiString[4] = {0x00, 0x01, 0x06, 0x25};
+  const size_t seiSize = 4;
 
-  unsigned char *match = NULL;
-  off_t matchPos = 0;
+  FILE *filePtr;
   off_t fileSize = 0;
-
   size_t fileRead = 0;
-  size_t origBufferSize = bufferSize;
-  int numOfBuffers = 0;
-  // unsigned char buffer[bufferSize];
+  bool useStdin = false;
   unsigned char *buffer = (unsigned char *)malloc(sizeByte * bufferSize);
   unsigned char *bufferPtr = buffer;
+  size_t origBufferSize = bufferSize;
+  unsigned char *match = NULL;
 
   int progress = 0;
   int timeoutCounter = time(NULL);
   const int timeout = 60;
 
-  FILE *filePtr = fopen(filename, "rb");
+  if ((strlen(filename) == 1) && (strncmp(filename, "-", 1) == 0)) {
+    useStdin = true;
+  }
 
-  // Get File Size
-  fseeko(filePtr, 0, SEEK_END);
-  fileSize = ftello(filePtr);
-  fseeko(filePtr, 0, SEEK_SET);
+  if (useStdin) {
+    filePtr = stdin;
+  } else {
+    filePtr = fopen(filename, "rb");
+  }
+
+  if (!useStdin) {
+    // Get File Size
+    fseeko(filePtr, 0, SEEK_END);
+    fileSize = ftello(filePtr);
+    fseeko(filePtr, 0, SEEK_SET);
+  }
 
   // Initilize buffer.
   fread(buffer, sizeByte, bufferSize, filePtr);
@@ -106,12 +116,19 @@ int getOFMDsInFile(size_t storeSize, size_t bufferSize, const char *filename,
       return 1;
     }
   }
+  bufferSize -= (match - bufferPtr);
+  bufferPtr = match;
+
+  memmove(buffer, bufferPtr, bufferSize);
+  fileRead = fread(buffer + bufferSize, sizeByte, origBufferSize - bufferSize,
+                   filePtr);
+  bufferSize += fileRead;
+  bufferPtr = buffer;
 
   while ((match = my_memmem(bufferPtr, bufferSize, seiString, seiSize)) !=
          NULL) {
     // Make match the start of buffer
-    matchPos = (match - bufferPtr);
-    bufferSize -= matchPos;
+    bufferSize -= (match - bufferPtr);
     bufferPtr = match;
 
     // if bufferSize is too small read more data
@@ -127,8 +144,7 @@ int getOFMDsInFile(size_t storeSize, size_t bufferSize, const char *filename,
     match = my_memmem(bufferPtr, 200, "OFMD", 4);
     if (match != NULL) {
       // Move OFMD to start of buffer.
-      matchPos = (match - bufferPtr);
-      bufferSize -= matchPos;
+      bufferSize -= (match - bufferPtr);
       bufferPtr = match;
 
       // Make sure the OFMD is valid before loading it into the OFMDs.
@@ -136,15 +152,15 @@ int getOFMDsInFile(size_t storeSize, size_t bufferSize, const char *filename,
       if (frameRate >= 1 && frameRate <= 7 && frameRate != 5) {
         // Make room to store data into 2D array.
         *OFMDs =
-            (unsigned char **)realloc(*OFMDs, sizeBypePtr * (numOfBuffers + 1));
-        (*OFMDs)[numOfBuffers] = (unsigned char *)malloc(sizeByte * storeSize);
+            (unsigned char **)realloc(*OFMDs, sizeBypePtr * (OFMDCounter + 1));
+        (*OFMDs)[OFMDCounter] = (unsigned char *)malloc(sizeByte * storeSize);
         // Copy the data to OFMDs.
-        memcpy((*OFMDs)[numOfBuffers++], bufferPtr, storeSize);
+        memcpy((*OFMDs)[OFMDCounter++], bufferPtr, storeSize);
       }
     } else {
       // Skip if the OFMD is not valid.
-      bufferSize -= 200;
-      bufferPtr += 200;
+      bufferSize -= OFMDSearchSize;
+      bufferPtr += OFMDSearchSize;
     }
 
     // If the next seiString can't be found.
@@ -175,17 +191,26 @@ int getOFMDsInFile(size_t storeSize, size_t bufferSize, const char *filename,
       }
     }
 
+    if (!useStdin) {
+      progress = (float)ftello(filePtr) / (float)fileSize * 100;
+      fprintf(stderr, "\rProgress: %d%s", progress, "%");
+    }
+  }
+
+  if (!useStdin) {
     progress = (float)ftello(filePtr) / (float)fileSize * 100;
     fprintf(stderr, "\rProgress: %d%s", progress, "%");
+    fprintf(stderr, "\n");
+    fflush(stderr);
   }
-  progress = (float)ftello(filePtr) / (float)fileSize * 100;
-  fprintf(stderr, "\rProgress: %d%s", progress, "%");
-  fprintf(stderr, "\n");
-  fflush(stderr);
 
   free(buffer);
 
-  return numOfBuffers;
+  if (!useStdin) {
+    fclose(filePtr);
+  }
+
+  return OFMDCounter;
 }
 
 // From: https://www.capitalware.com/rl_blog/?p=5847
