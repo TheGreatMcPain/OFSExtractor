@@ -14,6 +14,17 @@ int getOFMDsInFile(size_t storeSize, size_t bufferSize, const char *filename,
 void *my_memmem(const void *haystack, size_t haystacklen, const void *needle,
                 size_t needlelen);
 
+// Function for freeing two dimensional arrays.
+void free2DArray(void **Array2D, size_t numOfInnerArrays) {
+  size_t x = 0;
+
+  for (x = 0; x < numOfInnerArrays; x++) {
+    free((Array2D)[x]);
+  }
+
+  free(Array2D);
+}
+
 int main(int argc, const char **argv) {
   int OFMDCounter = 0;
   int verified = 0;
@@ -36,6 +47,8 @@ int main(int argc, const char **argv) {
   }
 
   printf("VerifiedOFMD: %d\n", verified);
+
+  free2DArray((void **)OFMDs, OFMDCounter);
 }
 
 /*
@@ -170,7 +183,7 @@ int getOFMDsInFile(size_t storeSize, size_t bufferSize, const char *filename,
   fprintf(stderr, "\n");
   fflush(stderr);
 
-  fclose(filePtr);
+  free(buffer);
 
   return numOfBuffers;
 }
