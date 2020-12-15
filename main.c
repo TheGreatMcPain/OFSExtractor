@@ -1,3 +1,4 @@
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -36,7 +37,7 @@ int main(int argc, const char **argv) {
     exit(EXIT_FAILURE);
   }
 
-  OFMDCounter = getOFMDsInFile(2048, BUFFER_SIZE, argv[1], &OFMDs);
+  OFMDCounter = getOFMDsInFile(4096, BUFFER_SIZE, argv[1], &OFMDs);
 
   printf("OFMDs: %d\n", OFMDCounter);
 
