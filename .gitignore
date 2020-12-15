@@ -6,3 +6,5 @@ a.out
 OFSExtractor
 compile_commands.json
 .clangd
+.cache
+build
