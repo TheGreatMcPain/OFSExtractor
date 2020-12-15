@@ -76,7 +76,7 @@ int main(int argc, char *argv[]) {
   printf("Searching file for 3D-Planes.\n\n");
 
   OFMDs = (BYTE **)malloc(sizeof(BYTE *));
-  numOFMDs = getOFMDsFromFile(argv[1], &OFMDs);
+  numOFMDs = getOFMDsInFile(OFMD_SIZE, BUFFER_SIZE, argv[1], &OFMDs);
 
   if (numOFMDs == 0) {
     printf("This file doesn't have any 3D-Planes.\n");
@@ -168,17 +168,19 @@ void parseOptions(int argc, char *argv[], BYTE *newFrameRate, BYTE *dropFrame,
   }
 
   if (argc >= 2) {
-    fileExt = getFileExt(argv[1]);
-    validExt = false;
-    for (int x = 0; x < 3; x++) {
-      if (strcmp(supportedExt[x], fileExt) == 0 ||
-          strcmp(supportedExtUpper[x], fileExt) == 0) {
-        validExt = true;
+    if ((strlen(argv[1]) != 1) && (strncmp(argv[1], "-", 1) != 0)) {
+      fileExt = getFileExt(argv[1]);
+      validExt = false;
+      for (int x = 0; x < 3; x++) {
+        if (strcmp(supportedExt[x], fileExt) == 0 ||
+            strcmp(supportedExtUpper[x], fileExt) == 0) {
+          validExt = true;
+        }
       }
-    }
-    if (!validExt) {
-      printf("'%s': Is not a supported file extention.\n", fileExt);
-      exit(1);
+      if (!validExt) {
+        printf("'%s': Is not a supported file extention.\n", fileExt);
+        exit(1);
+      }
     }
   }
 
