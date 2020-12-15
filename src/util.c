@@ -22,10 +22,16 @@
  * SOFTWARE.
  */
 #define _FILE_OFFSET_BITS 64
+#include <errno.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+
+#ifdef _WIN32
+#include <direct.h> // _mkdir
+#endif
 
 #include "util.h"
 
@@ -116,6 +122,39 @@ void *searchNative(const void *haystack, size_t haystackLength,
 
   // needle not found in haystack
   return NULL;
+}
+
+// Checks if a directory exists.
+int dirExists(const char *path) {
+  struct stat info;
+
+  if (stat(path, &info) != 0) {
+    return 0;
+  } else if (info.st_mode & S_IFDIR) {
+    return 1;
+  } else {
+    return 0;
+  }
+}
+
+// Create a directory, but keep going if folder exists.
+// return -1 if any other error occurs.
+int makeDirectory(const char *path) {
+#ifdef _WIN32 // Windows uses a different mkdir.
+  int mkdirStatus = _mkdir(path);
+#else
+  int mkdirStatus = mkdir(path, 0777);
+#endif
+
+  if (errno != EEXIST) {
+    if (mkdirStatus == -1) {
+      printf("Failed to create '%s'\n", path);
+      perror("mkdir()");
+      return -1;
+    }
+  }
+
+  return 0;
 }
 
 #if _WIN32 // Windows implementation of basename.

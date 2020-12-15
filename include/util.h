@@ -40,6 +40,10 @@ char *basename(char *path);
 void *searchNative(const void *haystack, size_t haystackLength,
                    const void *needle, size_t needleLength);
 
+int dirExists(const char *path);
+
+int makeDirectory(const char *path);
+
 void free2DArray(void ***array, int array2DSize);
 
 void checkFileError(FILE *file);
