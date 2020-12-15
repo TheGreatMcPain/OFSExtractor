@@ -73,6 +73,11 @@ int main(int argc, char *argv[]) {
     OFMDdata.frameRate = newFrameRate;
   }
 
+  // Create OFS file directory.
+  if (makeDirectory(outFolder) == -1) {
+    exit(1);
+  }
+
   printf("Searching file for 3D-Planes.\n\n");
 
   OFMDs = (BYTE **)malloc(sizeof(BYTE *));

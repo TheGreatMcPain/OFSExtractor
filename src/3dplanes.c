@@ -22,20 +22,16 @@
  * SOFTWARE.
  */
 #define _FILE_OFFSET_BITS 64
+#include <errno.h>
 #include <math.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/stat.h>
 #include <time.h>
 
 #include "3dplanes.h"
 #include "util.h"
-
-#if _WIN32
-#include <direct.h>
-#endif
 
 /*
  * Searches for all "valid" OFMDs within a 3D H264/MVC stream.
@@ -387,14 +383,10 @@ void createOFSFiles(BYTE **planes, struct OFMDdata OFMDdata, int validPlanes[],
   BYTE timecode[4] = {0x00, 0x00, 0x00, 0x00};
   BYTE frameArray[4] = {0x00, 0x00, 0x00, 0x00};
   srand(time(NULL));
-  struct stat sb;
 
-  if (!(stat(outFolder, &sb) == 0) && !S_ISDIR(sb.st_mode)) {
-#ifdef _WIN32 // Windows uses a different mkdir.
-    _mkdir(outFolder);
-#else
-    mkdir(outFolder, 0777);
-#endif
+  if (!dirExists(outFolder)) {
+    printf("'%s' doesn't exist.\n", outFolder);
+    exit(1);
   }
 
   // The OFS should be 41 bytes plus the number of depth values (frames).
