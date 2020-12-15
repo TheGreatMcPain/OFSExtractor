@@ -22,6 +22,7 @@
  * SOFTWARE.
  */
 #pragma once
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -40,12 +41,12 @@ char *basename(char *path);
 void *searchNative(const void *haystack, size_t haystackLength,
                    const void *needle, size_t needleLength);
 
-int dirExists(const char *path);
+bool dirExists(const char *path);
+
+bool testOpenReadFile(const char *filename);
 
 int makeDirectory(const char *path);
 
 void free2DArray(void ***array, int array2DSize);
-
-void checkFileError(FILE *file);
 
 const char *getFileExt(const char *fileName);

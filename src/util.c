@@ -50,15 +50,6 @@ const char *getFileExt(const char *fileName) {
   return fileName + index + 1;
 }
 
-void checkFileError(FILE *file) {
-  if (ferror(file) != 0) {
-    printf("Failed to read from file. Exiting.\n");
-  }
-  if (feof(file) != 0) {
-    printf("We have reached end-of-file. Exiting.\n");
-  }
-}
-
 void free2DArray(void ***array, int array2DSize) {
   for (int x = 0; x < array2DSize; x++) {
     free((*array)[x]);
@@ -125,16 +116,30 @@ void *searchNative(const void *haystack, size_t haystackLength,
 }
 
 // Checks if a directory exists.
-int dirExists(const char *path) {
+bool dirExists(const char *path) {
   struct stat info;
 
   if (stat(path, &info) != 0) {
-    return 0;
+    return false;
   } else if (info.st_mode & S_IFDIR) {
-    return 1;
+    return true;
   } else {
-    return 0;
+    return false;
   }
+}
+
+// See if a file can be opened for reading.
+bool testOpenReadFile(const char *filename) {
+  FILE *filePtr = fopen(filename, "rb");
+
+  if (filePtr == NULL) {
+    perror("fopen()");
+    printf("Failed to open '%s'\n", filename);
+    return false;
+  }
+
+  fclose(filePtr);
+  return true;
 }
 
 // Create a directory, but keep going if folder exists.
