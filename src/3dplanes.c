@@ -30,8 +30,8 @@
 #include <sys/stat.h>
 #include <time.h>
 
-#include <3dplanes.h>
-#include <util.h>
+#include "3dplanes.h"
+#include "util.h"
 
 #if _WIN32
 #include <direct.h>

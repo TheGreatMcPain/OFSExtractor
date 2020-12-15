@@ -8,11 +8,16 @@ m_dep = c.find_library('m', required : false)
 date = run_command('date', '+%b %d %Y %T %Z').stdout().strip()
 cdata = configuration_data()
 cdata.set('date', date)
-configure_file(
+compiledate = configure_file(
     input : 'compiledate.h.in',
     output : 'compiledate.h',
     configuration : cdata
 )
+
+version = vcs_tag(
+  command: ['git', 'describe', '--tags', '--dirty=+'],
+  input: 'version.h.in',
+  output: 'version.h')
 
 cpu_family = target_machine.cpu_family()
 system = target_machine.system()
@@ -31,6 +36,8 @@ endif
 
 executable(
     binary_name,
+    version,
+    compiledate,
 
     'src/main.c',
     'src/util.c',

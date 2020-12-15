@@ -27,9 +27,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <3dplanes.h>
-#include <compiledate.h>
-#include <util.h>
+#include "3dplanes.h"
+#include "compiledate.h" // Generated via meson
+#include "util.h"
+#include "version.h" // from 'git describe --tags --dirty=+'
 
 #ifndef VERSION
 #define VERSION "1.0"
@@ -257,7 +258,7 @@ void printIntro() {
   // Print version info, and 'arch'.
   printf("OFSExtractor %s %sby TheGreatMcPain (aka Sixsupersonic on doom9)\n",
          VERSION, ARCH);
-#ifndef DATE // Set compile date. (Might change this to git commit date.)
+#ifndef DATE // Set compile date.
   printf("This program was compiled on %s %s.\n\n", __DATE__, __TIME__);
 #else
   printf("This program was compiled on %s.\n\n", DATE);
