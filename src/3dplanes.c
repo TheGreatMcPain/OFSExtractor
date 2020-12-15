@@ -37,83 +37,167 @@
 #include <direct.h>
 #endif
 
-// Collects the OFMD data from the MVC file, and stores it in a 2D array.
-int getOFMDsFromFile(const char *fileName, BYTE ***OFMDs) {
-  FILE *filePtr;
-  BYTE *posPtr;
-  off_t OFMDpos;
-  BYTE *buffer;
-  const int blockSize = BLOCKSIZE;
-  BYTE seiString[4] = {0x00, 0x01, 0x06, 0x25};
-  int numOFMDs = 0;
-  BYTE frameRate;
+/*
+ * Searches for all "valid" OFMDs within a 3D H264/MVC stream.
+ * Which will be later used to create OFS '3D-Planes' files.
+ *
+ * 'storeSize': Size of resulting OFMD buffers.
+ * 'bufferSize': Size of buffer that will be used when reading file in memory.
+ * 'filename': The path to the 3D H264/MVC file.
+ * 'OFMDs': Pointer to a 2D array which will contain the resulting OFMD buffers.
+ */
+int getOFMDsInFile(size_t storeSize, size_t bufferSize, const char *filename,
+                   BYTE ***OFMDs) {
+  const size_t sizeByte = sizeof(unsigned char);
+  const size_t sizeBypePtr = sizeof(unsigned char *);
+  const size_t OFMDSearchSize = 400;
+  int frameRate = 0;
+  int OFMDCounter = 0;
 
-  filePtr = fopen(fileName, "rb");
-  if (filePtr == NULL) {
-    printf("Failed to open: %s\n", fileName);
-    exit(1);
+  const unsigned char seiString[4] = {0x00, 0x01, 0x06, 0x25};
+  const size_t seiSize = 4;
+
+  FILE *filePtr;
+  off_t fileSize = 0;
+  size_t fileRead = 0;
+  bool useStdin = false;
+  unsigned char *buffer = (unsigned char *)malloc(sizeByte * bufferSize);
+  unsigned char *bufferPtr = buffer;
+  size_t origBufferSize = bufferSize;
+  unsigned char *match = NULL;
+
+  int progress = 0;
+  int timeoutCounter = time(NULL);
+  const int timeout = 60;
+
+  if ((strlen(filename) == 1) && (strncmp(filename, "-", 1) == 0)) {
+    useStdin = true;
   }
 
-  // Get the size of the file.
-  fseeko(filePtr, 0, SEEK_END);
-  off_t fileSize = ftello(filePtr);
-  fseeko(filePtr, 0, SEEK_SET);
+  if (useStdin) {
+    filePtr = stdin;
+  } else {
+    filePtr = fopen(filename, "rb");
+  }
 
-  while (1) {
-    // Search for the next SEI position in the file.
-    if (searchStringInFile(seiString, 4, blockSize, filePtr, fileSize) !=
-        NULL) {
-      // Check for nearby OFMD.
-      buffer = (BYTE *)malloc(200 * sizeof(BYTE));
-      if ((fread(buffer, 1, 200, filePtr)) == 0) {
-        checkFileError(filePtr);
-        free(buffer);
-        free2DArray((void ***)OFMDs, numOFMDs);
-        exit(1);
-      }
-      if ((posPtr = my_memmem(buffer, 200, "OFMD", 4)) != NULL) {
-        // Seek to OFMD
-        OFMDpos = (posPtr - buffer) - 200;
-        fseeko(filePtr, OFMDpos, SEEK_CUR);
-      } else {
-        free(buffer);
-        continue;
-      }
+  if (!useStdin) {
+    // Get File Size
+    fseeko(filePtr, 0, SEEK_END);
+    fileSize = ftello(filePtr);
+    fseeko(filePtr, 0, SEEK_SET);
+  }
 
-      // Store the OFMD's data into buffer.
-      buffer = (BYTE *)malloc(4096 * sizeof(BYTE));
-      if ((fread(buffer, 1, 4096, filePtr)) == 0) {
-        checkFileError(filePtr);
-        free(buffer);
-        free2DArray((void ***)OFMDs, numOFMDs);
-        exit(1);
-      }
-      fseeko(filePtr, -4096, SEEK_CUR);
+  // Initilize buffer.
+  fread(buffer, sizeByte, bufferSize, filePtr);
 
-      // Verify the OFMD by checking it's frame-rate value.
-      frameRate = buffer[4] & 15;
-      if (frameRate >= 1 && frameRate <= 7 && frameRate != 5) {
-        // If the OFMD is valid create a new pointer to store it's data.
-        *OFMDs = (BYTE **)realloc(*OFMDs, (numOFMDs + 1) * sizeof(BYTE *));
-        (*OFMDs)[numOFMDs] = buffer;
-        numOFMDs += 1;
-      } else {
-        free(buffer);
-      }
-
-    } else {
-      // Break the loop if we're done searching.
-      break;
+  // Find first seiString
+  while ((match = searchNative(bufferPtr, bufferSize, seiString, seiSize)) ==
+         NULL) {
+    // Shift buffer by (bufferSize - (seiSize - 1))
+    memmove(buffer, buffer + (bufferSize - (seiSize - 1)), (seiSize - 1));
+    fileRead = fread(buffer + (seiSize - 1), sizeByte,
+                     bufferSize - (seiSize - 1), filePtr);
+    // Stop if timeout reached.
+    if ((timeoutCounter - time(NULL)) > timeout) {
+      fprintf(stderr, "SEI couldn't be found within %d seconds.\n", timeout);
+      return 1;
     }
-    int status = ceil(((double)ftello(filePtr) / (double)fileSize) * 100);
-    // Print to stderr incase we want to pipe to a file.
-    fprintf(stderr, "\rProgress %d%s", status, "%");
+  }
+  bufferSize -= (match - bufferPtr);
+  bufferPtr = match;
+
+  memmove(buffer, bufferPtr, bufferSize);
+  fileRead = fread(buffer + bufferSize, sizeByte, origBufferSize - bufferSize,
+                   filePtr);
+  bufferSize += fileRead;
+  bufferPtr = buffer;
+
+  while ((match = searchNative(bufferPtr, bufferSize, seiString, seiSize)) !=
+         NULL) {
+    // Make match the start of buffer
+    bufferSize -= (match - bufferPtr);
+    bufferPtr = match;
+
+    // if bufferSize is too small read more data
+    if ((storeSize * 2) > bufferSize) {
+      memmove(buffer, bufferPtr, bufferSize);
+      fileRead = fread(buffer + bufferSize, sizeByte,
+                       origBufferSize - bufferSize, filePtr);
+      bufferSize += fileRead;
+      bufferPtr = buffer;
+    }
+
+    // Search for OFMD within the next 200 bytes from the seiString.
+    match = searchNative(bufferPtr, OFMDSearchSize, "OFMD", 4);
+    if (match != NULL) {
+      // Move OFMD to start of buffer.
+      bufferSize -= (match - bufferPtr);
+      bufferPtr = match;
+
+      // Make sure the OFMD is valid before loading it into the OFMDs.
+      frameRate = bufferPtr[4] & 15;
+      if (frameRate >= 1 && frameRate <= 7 && frameRate != 5) {
+        // Make room to store data into 2D array.
+        *OFMDs =
+            (unsigned char **)realloc(*OFMDs, sizeBypePtr * (OFMDCounter + 1));
+        (*OFMDs)[OFMDCounter] = (unsigned char *)malloc(sizeByte * storeSize);
+        // Copy the data to OFMDs.
+        memcpy((*OFMDs)[OFMDCounter++], bufferPtr, storeSize);
+      }
+    } else {
+      // Skip if the OFMD is not valid.
+      bufferSize -= OFMDSearchSize;
+      bufferPtr += OFMDSearchSize;
+    }
+
+    // If the next seiString can't be found.
+    // Fill buffer, and search for the next seiString.
+    if ((match = searchNative(bufferPtr, bufferSize, seiString, seiSize)) ==
+        NULL) {
+      memmove(buffer, bufferPtr, bufferSize);
+      fileRead = fread(buffer + bufferSize, sizeByte,
+                       origBufferSize - bufferSize, filePtr);
+      bufferSize += fileRead;
+      bufferPtr = buffer;
+    }
+
+    timeoutCounter = time(NULL);
+    while ((match = searchNative(bufferPtr, bufferSize, seiString, seiSize)) ==
+           NULL) {
+      // Shift buffer by (bufferSize - (seiSize - 1))
+      memmove(buffer, buffer + (bufferSize - (seiSize - 1)), (seiSize - 1));
+      fileRead = fread(buffer + (seiSize - 1), sizeByte,
+                       bufferSize - (seiSize - 1), filePtr);
+      if (feof(filePtr)) {
+        break;
+      }
+      // Stop if timeout reached.
+      if ((timeoutCounter - time(NULL)) > timeout) {
+        fprintf(stderr, "SEI couldn't be found within %d seconds.\n", timeout);
+        return 1;
+      }
+    }
+
+    if (!useStdin) {
+      progress = (float)ftello(filePtr) / (float)fileSize * 100;
+      fprintf(stderr, "\rProgress: %d%s", progress, "%");
+    }
+  }
+
+  if (!useStdin) {
+    progress = (float)ftello(filePtr) / (float)fileSize * 100;
+    fprintf(stderr, "\rProgress: %d%s", progress, "%");
+    fprintf(stderr, "\n");
     fflush(stderr);
   }
 
-  fclose(filePtr);
-  printf("\n");
-  return numOFMDs;
+  free(buffer);
+
+  if (!useStdin) {
+    fclose(filePtr);
+  }
+
+  return OFMDCounter;
 }
 
 // Parses the depth values from the OFMDs then stores them into the OFMDdata
