@@ -276,8 +276,8 @@ void usage(char *argv[]) {
   printf("  -license : Print license (MIT).\n\n");
   printf("  <input file> : Can be a raw MVC stream, ");
   printf("a H264+MVC combined stream (like those from MakeMKV),\n");
-  printf("                 or a M2TS file. (M2TS is not fully supported, and "
-         "could burn your toast.)\n\n");
+  printf("                 or a M2TS file. (M2TS is not fully supported.)\n");
+  printf("                 Using '-' will read from stdin.\n\n");
   printf("  <output folder> : The output folder which will contain the ofs "
          "files.\n");
   printf("                    If undefined the current directory will be "
