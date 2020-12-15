@@ -25,8 +25,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define BLOCKSIZE 131072   // 128KB
-#define MAXCACHE 536870912 // Will stop if ram usage hits 512MB.
+#define BUFFER_SIZE (1024 * 128) // 128KB
+#define OFMD_SIZE (4096)         // 4KB
 
 typedef unsigned char BYTE;
 
@@ -36,10 +36,12 @@ char *basename(char *path);
 #include "libgen.h"
 #endif
 
-FILE *searchStringInFile(BYTE *small, int smallSize, int blockSize, FILE *file,
-                         off_t fileSize);
-void *my_memmem(const void *haystack, size_t haystacklen, const void *needle,
-                size_t needlelen);
+// From: https://create.stephan-brumme.com/practical-string-searching/
+void *searchNative(const void *haystack, size_t haystackLength,
+                   const void *needle, size_t needleLength);
+
 void free2DArray(void ***array, int array2DSize);
+
 void checkFileError(FILE *file);
+
 const char *getFileExt(const char *fileName);
