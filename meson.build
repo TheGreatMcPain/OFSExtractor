@@ -1,4 +1,4 @@
-project('OFSExtractor', 'c', version : '1.0', default_options : ['warning_level=3'])
+project('OFSExtractor', 'c', version : '1.1-beta1', default_options : ['warning_level=3'])
 
 incdir = include_directories('include')
 
