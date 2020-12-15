@@ -63,8 +63,9 @@ int getOFMDsInFile(size_t storeSize, size_t bufferSize, const char *filename,
   unsigned char *match = NULL;
 
   int progress = 0;
-  int timeoutCounter = time(NULL);
-  const int timeout = 60;
+  int whileTimerStart = time(NULL);
+  int OFMDTimerStart = time(NULL);
+  const int timeout = 10;
 
   if ((strlen(filename) == 1) && (strncmp(filename, "-", 1) == 0)) {
     useStdin = true;
@@ -94,9 +95,9 @@ int getOFMDsInFile(size_t storeSize, size_t bufferSize, const char *filename,
     fileRead = fread(buffer + (seiSize - 1), sizeByte,
                      bufferSize - (seiSize - 1), filePtr);
     // Stop if timeout reached.
-    if ((timeoutCounter - time(NULL)) > timeout) {
+    if ((time(NULL) - whileTimerStart) > timeout) {
       fprintf(stderr, "SEI couldn't be found within %d seconds.\n", timeout);
-      return 1;
+      return -1;
     }
   }
   bufferSize -= (match - bufferPtr);
@@ -146,6 +147,14 @@ int getOFMDsInFile(size_t storeSize, size_t bufferSize, const char *filename,
       bufferPtr += OFMDSearchSize;
     }
 
+    // Check if OFMDCounter has increased before the timeout.
+    if (OFMDCounter == 0) {
+      if ((time(NULL) - OFMDTimerStart) > timeout) {
+        fprintf(stderr, "No 3D-Planes found after %d seconds.\n", timeout);
+        return -1;
+      }
+    }
+
     // If the next seiString can't be found.
     // Fill buffer, and search for the next seiString.
     if ((match = searchNative(bufferPtr, bufferSize, seiString, seiSize)) ==
@@ -157,7 +166,7 @@ int getOFMDsInFile(size_t storeSize, size_t bufferSize, const char *filename,
       bufferPtr = buffer;
     }
 
-    timeoutCounter = time(NULL);
+    whileTimerStart = time(NULL);
     while ((match = searchNative(bufferPtr, bufferSize, seiString, seiSize)) ==
            NULL) {
       // Shift buffer by (bufferSize - (seiSize - 1))
@@ -168,9 +177,9 @@ int getOFMDsInFile(size_t storeSize, size_t bufferSize, const char *filename,
         break;
       }
       // Stop if timeout reached.
-      if ((timeoutCounter - time(NULL)) > timeout) {
+      if ((time(NULL) - whileTimerStart) > timeout) {
         fprintf(stderr, "SEI couldn't be found within %d seconds.\n", timeout);
-        return 1;
+        return -1;
       }
     }
 
