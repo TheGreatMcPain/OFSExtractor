@@ -11,8 +11,9 @@
 int getOFMDsInFile(size_t storeSize, size_t bufferSize, const char *filename,
                    unsigned char ***OFMDs);
 
-void *my_memmem(const void *haystack, size_t haystacklen, const void *needle,
-                size_t needlelen);
+// From: https://create.stephan-brumme.com/practical-string-searching/
+void *searchNative(const void *haystack, size_t haystackLength,
+                   const void *needle, size_t needleLength);
 
 // Function for freeing two dimensional arrays.
 void free2DArray(void **Array2D, size_t numOfInnerArrays) {
@@ -105,11 +106,12 @@ int getOFMDsInFile(size_t storeSize, size_t bufferSize, const char *filename,
   fread(buffer, sizeByte, bufferSize, filePtr);
 
   // Find first seiString
-  while ((match = my_memmem(buffer, bufferSize, seiString, seiSize)) == NULL) {
-    // If no seiString was found. Just shift the buffer by half the
-    // bufferSize.
-    memmove(buffer, buffer + (bufferSize / 2), (bufferSize / 2) * sizeByte);
-    fread(buffer + (bufferSize / 2), sizeByte, (bufferSize / 2), filePtr);
+  while ((match = searchNative(bufferPtr, bufferSize, seiString, seiSize)) ==
+         NULL) {
+    // Shift buffer by (bufferSize - (seiSize - 1))
+    memmove(buffer, buffer + (bufferSize - (seiSize - 1)), (seiSize - 1));
+    fileRead = fread(buffer + (seiSize - 1), sizeByte,
+                     bufferSize - (seiSize - 1), filePtr);
     // Stop if timeout reached.
     if ((timeoutCounter - time(NULL)) > timeout) {
       fprintf(stderr, "SEI couldn't be found within %d seconds.\n", timeout);
@@ -125,7 +127,7 @@ int getOFMDsInFile(size_t storeSize, size_t bufferSize, const char *filename,
   bufferSize += fileRead;
   bufferPtr = buffer;
 
-  while ((match = my_memmem(bufferPtr, bufferSize, seiString, seiSize)) !=
+  while ((match = searchNative(bufferPtr, bufferSize, seiString, seiSize)) !=
          NULL) {
     // Make match the start of buffer
     bufferSize -= (match - bufferPtr);
@@ -141,7 +143,7 @@ int getOFMDsInFile(size_t storeSize, size_t bufferSize, const char *filename,
     }
 
     // Search for OFMD within the next 200 bytes from the seiString.
-    match = my_memmem(bufferPtr, 200, "OFMD", 4);
+    match = searchNative(bufferPtr, OFMDSearchSize, "OFMD", 4);
     if (match != NULL) {
       // Move OFMD to start of buffer.
       bufferSize -= (match - bufferPtr);
@@ -165,7 +167,7 @@ int getOFMDsInFile(size_t storeSize, size_t bufferSize, const char *filename,
 
     // If the next seiString can't be found.
     // Fill buffer, and search for the next seiString.
-    if ((match = my_memmem(bufferPtr, bufferSize, seiString, seiSize)) ==
+    if ((match = searchNative(bufferPtr, bufferSize, seiString, seiSize)) ==
         NULL) {
       memmove(buffer, bufferPtr, bufferSize);
       fileRead = fread(buffer + bufferSize, sizeByte,
@@ -175,7 +177,7 @@ int getOFMDsInFile(size_t storeSize, size_t bufferSize, const char *filename,
     }
 
     timeoutCounter = time(NULL);
-    while ((match = my_memmem(bufferPtr, bufferSize, seiString, seiSize)) ==
+    while ((match = searchNative(bufferPtr, bufferSize, seiString, seiSize)) ==
            NULL) {
       // Shift buffer by (bufferSize - (seiSize - 1))
       memmove(buffer, buffer + (bufferSize - (seiSize - 1)), (seiSize - 1));
@@ -213,46 +215,60 @@ int getOFMDsInFile(size_t storeSize, size_t bufferSize, const char *filename,
   return OFMDCounter;
 }
 
-// From: https://www.capitalware.com/rl_blog/?p=5847
-/**
- * Function Name
- *  memmem
+/*
+ * This is slightly modified version of the 'searchNative' function
+ * made by Stephan Brumme, and is under the ZLib license.
  *
- * Description
- *  Like strstr(), but for non-text buffers that are not NULL delimited.
+ * This has been modified so that it can be a drop-in replacement for 'memmem'
  *
- *  public domain by Bob Stout
+ * The original source code can be found...
  *
- * Input parameters
- *  haystack    - pointer to the buffer to be searched
- *  haystacklen - length of the haystack buffer
- *  needle      - pointer to a buffer that will be searched for
- *  needlelen   - length of the needle buffer
- *
- * Return Value
- *  pointer to the memory address of the match or NULL.
+ * here: https://create.stephan-brumme.com/practical-string-searching/
+ * or here: https://github.com/stbrumme/practical-string-searching
  */
-void *my_memmem(const void *haystack, size_t haystacklen, const void *needle,
-                size_t needlelen) {
-  /* --------------------------------------------
-   * Variable declarations.
-   * --------------------------------------------
-   */
-  char *bf = (char *)haystack, *pt = (char *)needle, *p = bf;
+void *searchNative(const void *haystack, size_t haystackLength,
+                   const void *needle, size_t needleLength) {
+  // uses memchr() for the first byte, then memcmp to verify it's a valid match
 
-  /* --------------------------------------------
-   * Code section
-   * --------------------------------------------
-   */
-  while (needlelen <= (haystacklen - (p - bf))) {
-    if (NULL != (p = memchr(p, (int)(*pt), haystacklen - (p - bf)))) {
-      if (0 == memcmp(p, needle, needlelen))
-        return p;
-      else
-        ++p;
-    } else
-      break;
+  // detect invalid input
+  if (!haystack || !needle || haystackLength < needleLength)
+    return NULL;
+
+  // empty needle matches everything
+  if (needleLength == 0)
+    return (void *)haystack;
+
+  // shorter code for just one character
+  if (needleLength == 1)
+    return memchr(haystack, *(const char *)needle, haystackLength);
+
+  haystackLength -= needleLength - 1;
+  // points beyond last considered byte
+  const char *haystackEnd = (const char *)haystack + haystackLength;
+
+  // look for first byte
+  while ((haystack = memchr(haystack, *(const char *)needle, haystackLength)) !=
+         NULL) {
+    // does last byte match, too ?
+    if (((const char *)haystack)[needleLength - 1] ==
+        ((const char *)needle)[needleLength - 1])
+      // okay, perform full comparison, skip first and last byte (if just 2
+      // bytes => already finished)
+      if (needleLength == 2 ||
+          memcmp((const char *)haystack + 1, (const char *)needle + 1,
+                 needleLength - 2) == 0)
+        return (void *)haystack;
+
+    // compute number of remaining bytes
+    haystackLength = haystackEnd - (const char *)haystack;
+    if (haystackLength == 0)
+      return NULL;
+
+    // keep going
+    haystack = (const char *)haystack + 1;
+    haystackLength--;
   }
 
+  // needle not found in haystack
   return NULL;
 }
