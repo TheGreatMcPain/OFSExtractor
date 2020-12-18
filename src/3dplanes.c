@@ -33,6 +33,11 @@
 #include "3dplanes.h"
 #include "util.h"
 
+#ifdef _WIN32
+#include <fcntl.h>
+#include <io.h>
+#endif
+
 /*
  * Searches for all "valid" OFMDs within a 3D H264/MVC stream.
  * Which will be later used to create OFS '3D-Planes' files.
@@ -69,6 +74,26 @@ int getOFMDsInFile(size_t storeSize, size_t bufferSize, const char *filename,
 
   if ((strlen(filename) == 1) && (strncmp(filename, "-", 1) == 0)) {
     useStdin = true;
+  }
+
+  // Set stdin to binary mode.
+  if (useStdin) {
+#ifdef _WIN32
+    // Windows doesn't except 'NULL' as parameter for freopen.
+    int result = _setmode(_fileno(stdin), _O_BINARY);
+
+    if (result == -1) {
+      perror("_setmode()");
+      return -1;
+    }
+#else
+    filePtr = freopen(NULL, "rb", stdin);
+
+    if (filePtr == NULL) {
+      perror("freopen()");
+      return -1;
+    }
+#endif
   }
 
   if (useStdin) {
