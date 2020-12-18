@@ -232,8 +232,8 @@ int getOFMDsInFile(size_t storeSize, size_t bufferSize, const char *filename,
 
 // Parses the depth values from the OFMDs then stores them into the OFMDdata
 // struct.
-void getPlanesFromOFMDs(BYTE ***OFMDs, int numOFMDs, struct OFMDdata *OFMDdata,
-                        BYTE ***planes) {
+void getPlanesFromOFMDs(BYTE ***OFMDs, int numOFMDs,
+                        struct OFMDdata *OFMDdata) {
   int counter;
   int frameRate;
   int start;
@@ -256,9 +256,9 @@ void getPlanesFromOFMDs(BYTE ***OFMDs, int numOFMDs, struct OFMDdata *OFMDdata,
   OFMDdata->totalFrames = totalFrames;
 
   // Allocate planes array like this planes[numOfPlanes][totalFrames]
-  *planes = (BYTE **)malloc(numOfPlanes * sizeof(BYTE *));
+  OFMDdata->planes = (BYTE **)malloc(numOfPlanes * sizeof(BYTE *));
   for (int plane = 0; plane < numOfPlanes; plane++) {
-    (*planes)[plane] = (BYTE *)malloc(totalFrames * sizeof(BYTE));
+    OFMDdata->planes[plane] = (BYTE *)malloc(totalFrames * sizeof(BYTE));
   }
 
   // Place the depth values into each plane.
@@ -274,7 +274,7 @@ void getPlanesFromOFMDs(BYTE ***OFMDs, int numOFMDs, struct OFMDdata *OFMDdata,
       start = 14 + (plane * frameCount);
       end = 14 + (plane * frameCount) + frameCount;
       for (int x = start; x < end; x++) {
-        (*planes)[plane][counter] = (*OFMDs)[OFMD][x];
+        OFMDdata->planes[plane][counter] = (*OFMDs)[OFMD][x];
         counter++;
       }
     }
@@ -284,10 +284,10 @@ void getPlanesFromOFMDs(BYTE ***OFMDs, int numOFMDs, struct OFMDdata *OFMDdata,
 
 // Verifies each 3D-Plane, and modifies an array containing which planes are
 // valid.
-int verifyPlanes(struct OFMDdata OFMDdata, BYTE **planes, int validPlanes[],
-                 char *inFile) {
+int verifyPlanes(struct OFMDdata OFMDdata, int validPlanes[], char *inFile) {
   int numOfPlanes = OFMDdata.numOfPlanes;
   int totalFrames = OFMDdata.totalFrames;
+  BYTE **planes = OFMDdata.planes;
   int planesInFile = 0;
   const char *fileExt = getFileExt(inFile);
 
@@ -401,7 +401,7 @@ void parseDepths(int planeNum, int numOfPlanes, BYTE **planes, int numFrames) {
   }
 }
 
-void createOFSFiles(BYTE **planes, struct OFMDdata OFMDdata, int validPlanes[],
+void createOFSFiles(struct OFMDdata OFMDdata, int validPlanes[],
                     const char *outFolder, BYTE dropFrame) {
   FILE *ofsFile;
   char ofsName[80];   // Store the name of the ofs file.
@@ -464,7 +464,7 @@ void createOFSFiles(BYTE **planes, struct OFMDdata OFMDdata, int validPlanes[],
       bufferOffset += 4;
       // Copy the depth values.
       for (int x = 0; x < OFMDdata.totalFrames; x++) {
-        buffer[bufferOffset] = planes[plane][x];
+        buffer[bufferOffset] = OFMDdata.planes[plane][x];
         bufferOffset++;
       }
 

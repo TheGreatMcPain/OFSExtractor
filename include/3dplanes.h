@@ -33,18 +33,17 @@ struct OFMDdata {
   int frameRate;
   int totalFrames;
   int numOfPlanes;
+  BYTE **planes;
 };
 
 int getOFMDsInFile(size_t storeSize, size_t bufferSize, const char *filename,
                    BYTE ***OFMDs);
 
-void getPlanesFromOFMDs(BYTE ***OFMDs, int numOFMDs, struct OFMDdata *OFMDdata,
-                        BYTE ***planes);
+void getPlanesFromOFMDs(BYTE ***OFMDs, int numOFMDs, struct OFMDdata *OFMDdata);
 
-int verifyPlanes(struct OFMDdata OFMDdata, BYTE **planes, int validPlanes[],
-                 char *inFile);
+int verifyPlanes(struct OFMDdata OFMDdata, int validPlanes[], char *inFile);
 
 void parseDepths(int planeNum, int numOfPlanes, BYTE **planes, int numFrames);
 
-void createOFSFiles(BYTE **planes, struct OFMDdata OFMDdata, int validPlanes[],
+void createOFSFiles(struct OFMDdata OFMDdata, int validPlanes[],
                     const char *outFolder, BYTE dropFrame);

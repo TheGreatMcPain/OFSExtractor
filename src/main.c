@@ -52,7 +52,6 @@ char *printFpsValue(int frameRate);
 
 int main(int argc, char *argv[]) {
   BYTE **OFMDs;
-  BYTE **planes;
   BYTE newFrameRate = 0;
   BYTE dropFrame = 0;
   struct OFMDdata OFMDdata;
@@ -94,12 +93,12 @@ int main(int argc, char *argv[]) {
     exit(1);
   }
 
-  getPlanesFromOFMDs(&OFMDs, numOFMDs, &OFMDdata, &planes);
+  getPlanesFromOFMDs(&OFMDs, numOFMDs, &OFMDdata);
 
   printf("\nChecking 3D-Planes for valid depth values.\n");
 
-  planesInFile = verifyPlanes(OFMDdata, planes, validPlanes, argv[1]);
-  createOFSFiles(planes, OFMDdata, validPlanes, outFolder, dropFrame);
+  planesInFile = verifyPlanes(OFMDdata, validPlanes, argv[1]);
+  createOFSFiles(OFMDdata, validPlanes, outFolder, dropFrame);
 
   for (int x = 0; x < MAXPLANES; x++) {
     if (validPlanes[x] == 1) {
@@ -108,7 +107,7 @@ int main(int argc, char *argv[]) {
   }
 
   // Don't leak memory!
-  free2DArray((void ***)&planes, OFMDdata.numOfPlanes);
+  free2DArray((void ***)&OFMDdata.planes, OFMDdata.numOfPlanes);
   free2DArray((void ***)&OFMDs, numOFMDs);
 
   printf("\nNumber of 3D-Planes in MVC stream: %d\n", planesInFile);
