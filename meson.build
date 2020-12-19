@@ -2,15 +2,13 @@ project('OFSExtractor', 'c', version : '1.1-beta1', default_options : ['warning_
 
 incdir = include_directories('include')
 
-c = meson.get_compiler('c')
-m_dep = c.find_library('m', required : false)
-
-date = run_command('date', '+%b %d %Y %T %Z').stdout().strip()
+date = run_command('env', 'TZ=UTC', 'git', 'show', '-s', '--format=%cd',
+                   '--date=format-local:%b %d %Y %T UTC').stdout().strip()
 cdata = configuration_data()
 cdata.set('date', date)
-compiledate = configure_file(
-    input : 'compiledate.h.in',
-    output : 'compiledate.h',
+commitdate = configure_file(
+    input : 'commitdate.h.in',
+    output : 'commitdate.h',
     configuration : cdata
 )
 
@@ -37,15 +35,13 @@ endif
 executable(
     binary_name,
     version,
-    compiledate,
+    commitdate,
 
     'src/main.c',
     'src/util.c',
     'src/3dplanes.c',
 
     include_directories: incdir,
-
-    dependencies : m_dep,
 
     install: true
 )

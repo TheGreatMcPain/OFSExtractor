@@ -23,7 +23,6 @@
  */
 #define _FILE_OFFSET_BITS 64
 #include <errno.h>
-#include <math.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
