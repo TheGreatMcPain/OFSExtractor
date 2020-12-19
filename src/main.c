@@ -49,21 +49,22 @@ void printLicense();
 void usage(char *argv[]);
 void printIntro();
 char *printFpsValue(int frameRate);
+int sumOfIntArray(int *array, size_t sizeOfArray);
 
 int main(int argc, char *argv[]) {
   BYTE **OFMDs;
   BYTE newFrameRate = 0;
   BYTE dropFrame = 0;
   struct OFMDdata OFMDdata;
-  int validPlanes[MAXPLANES]; // Most BluRays have 32 planes.
   int planesInFile;
-  int planesWritten = 0;
   int numOFMDs;
   char *outFolder;
 
+  OFMDdata.validPlanes = (int *)malloc(sizeof(int) * MAXPLANES);
+
   // Prevent creating false ofs files.
   for (int x = 0; x < MAXPLANES; x++) {
-    validPlanes[x] = 0;
+    OFMDdata.validPlanes[x] = 0;
   }
 
   printIntro();
@@ -97,23 +98,19 @@ int main(int argc, char *argv[]) {
 
   printf("\nChecking 3D-Planes for valid depth values.\n");
 
-  planesInFile = verifyPlanes(OFMDdata, validPlanes, argv[1]);
-  createOFSFiles(OFMDdata, validPlanes, outFolder, dropFrame);
+  planesInFile = verifyPlanes(OFMDdata, argv[1]);
+  createOFSFiles(OFMDdata, outFolder, dropFrame);
 
-  for (int x = 0; x < MAXPLANES; x++) {
-    if (validPlanes[x] == 1) {
-      planesWritten++;
-    }
-  }
+  printf("\nNumber of 3D-Planes in MVC stream: %d\n", planesInFile);
+  printf("Number of 3D-Planes written: %d\n",
+         sumOfIntArray(OFMDdata.validPlanes, MAXPLANES));
+  printf("Number of frames: %d\n", OFMDdata.totalFrames);
+  printf("Framerate: %s\n\n", printFpsValue(OFMDdata.frameRate));
 
   // Don't leak memory!
   free2DArray((void ***)&OFMDdata.planes, OFMDdata.numOfPlanes);
   free2DArray((void ***)&OFMDs, numOFMDs);
-
-  printf("\nNumber of 3D-Planes in MVC stream: %d\n", planesInFile);
-  printf("Number of 3D-Planes written: %d\n", planesWritten);
-  printf("Number of frames: %d\n", OFMDdata.totalFrames);
-  printf("Framerate: %s\n\n", printFpsValue(OFMDdata.frameRate));
+  free(OFMDdata.validPlanes);
 }
 
 char *printFpsValue(int frameRate) {
@@ -282,6 +279,16 @@ void parseOptions(int argc, char *argv[], BYTE *newFrameRate, BYTE *dropFrame,
       exit(1);
     }
   }
+}
+
+int sumOfIntArray(int *array, size_t sizeOfArray) {
+  int sum = 0;
+
+  for (size_t x = 0; x < sizeOfArray; x++) {
+    sum += array[x];
+  }
+
+  return sum;
 }
 
 void printIntro() {

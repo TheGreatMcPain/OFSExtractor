@@ -284,7 +284,7 @@ void getPlanesFromOFMDs(BYTE ***OFMDs, int numOFMDs,
 
 // Verifies each 3D-Plane, and modifies an array containing which planes are
 // valid.
-int verifyPlanes(struct OFMDdata OFMDdata, int validPlanes[], char *inFile) {
+int verifyPlanes(struct OFMDdata OFMDdata, char *inFile) {
   int numOfPlanes = OFMDdata.numOfPlanes;
   int totalFrames = OFMDdata.totalFrames;
   BYTE **planes = OFMDdata.planes;
@@ -296,7 +296,7 @@ int verifyPlanes(struct OFMDdata OFMDdata, int validPlanes[], char *inFile) {
     for (int y = 0; y < totalFrames; y++) {
       if (planes[x][y] != 0x80) {
         thereArePlanes = true;
-        validPlanes[x] = 1; // Mark a valid plane as 1.
+        OFMDdata.validPlanes[x] = 1; // Mark a valid plane as 1.
       }
     }
 
@@ -401,8 +401,8 @@ void parseDepths(int planeNum, int numOfPlanes, BYTE **planes, int numFrames) {
   }
 }
 
-void createOFSFiles(struct OFMDdata OFMDdata, int validPlanes[],
-                    const char *outFolder, BYTE dropFrame) {
+void createOFSFiles(struct OFMDdata OFMDdata, const char *outFolder,
+                    BYTE dropFrame) {
   FILE *ofsFile;
   char ofsName[80];   // Store the name of the ofs file.
   char outFile[4096]; // will become what's used with fopen.
@@ -445,7 +445,7 @@ void createOFSFiles(struct OFMDdata OFMDdata, int validPlanes[],
   frameRate = (OFMDdata.frameRate * 16) + dropFrame;
 
   for (int plane = 0; plane < OFMDdata.numOfPlanes; plane++) {
-    if (validPlanes[plane] == 1) {
+    if (OFMDdata.validPlanes[plane] == 1) {
       bufferOffset = 12;
       strcpy(outFile, outFolder);
       GUID[15] = (BYTE)plane; // Copy the plane number to the end of the GUID.
