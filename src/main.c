@@ -1,7 +1,7 @@
 /*
  * MIT License
  *
- * Copyright (c) 2020 James McClain
+ * Copyright (c) 2021 James McClain
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -336,7 +336,7 @@ void usage(char *argv[]) {
 
 void printLicense() {
   printf("MIT License\n\n");
-  printf("Copyright (c) 2020 James McClain\n\n");
+  printf("Copyright (c) 2021 James McClain\n\n");
 
   printf("Permission is hereby granted, free of charge, to any person "
          "obtaining a copy\n");
