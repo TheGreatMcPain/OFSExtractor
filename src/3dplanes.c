@@ -50,7 +50,7 @@ int getOFMDsInFile(size_t storeSize, size_t bufferSize, const char *filename,
                    BYTE ***OFMDs) {
   const size_t sizeByte = sizeof(unsigned char);
   const size_t sizeBypePtr = sizeof(unsigned char *);
-  const size_t OFMDSearchSize = 400;
+  const size_t OFMDSearchSize = 200;
   int frameRate = 0;
   int OFMDCounter = 0;
 
@@ -109,7 +109,7 @@ int getOFMDsInFile(size_t storeSize, size_t bufferSize, const char *filename,
   }
 
   // Initilize buffer.
-  fread(buffer, sizeByte, bufferSize, filePtr);
+  fileRead = fread(buffer, sizeByte, bufferSize, filePtr);
 
   // Find first seiString
   while ((match = searchNative(bufferPtr, bufferSize, seiString, seiSize)) ==
@@ -139,13 +139,15 @@ int getOFMDsInFile(size_t storeSize, size_t bufferSize, const char *filename,
     bufferSize -= (match - bufferPtr);
     bufferPtr = match;
 
-    // if bufferSize is too small read more data
-    if ((storeSize * 2) > bufferSize) {
-      memmove(buffer, bufferPtr, bufferSize);
-      fileRead = fread(buffer + bufferSize, sizeByte,
-                       origBufferSize - bufferSize, filePtr);
-      bufferSize += fileRead;
-      bufferPtr = buffer;
+    if (!feof(filePtr)) {
+      // if bufferSize is too small read more data
+      if ((storeSize * 2) > bufferSize) {
+        memmove(buffer, bufferPtr, bufferSize);
+        fileRead = fread(buffer + bufferSize, sizeByte,
+                         origBufferSize - bufferSize, filePtr);
+        bufferSize += fileRead;
+        bufferPtr = buffer;
+      }
     }
 
     // Search for OFMD within the next 200 bytes from the seiString.
@@ -166,6 +168,10 @@ int getOFMDsInFile(size_t storeSize, size_t bufferSize, const char *filename,
         memcpy((*OFMDs)[OFMDCounter++], bufferPtr, storeSize);
       }
     } else {
+      // If our bufferSize gets this small we're probably done.
+      if (feof(filePtr) && bufferSize <= OFMDSearchSize) {
+        break;
+      }
       // Skip if the OFMD is not valid.
       bufferSize -= OFMDSearchSize;
       bufferPtr += OFMDSearchSize;
@@ -179,31 +185,31 @@ int getOFMDsInFile(size_t storeSize, size_t bufferSize, const char *filename,
       }
     }
 
-    // If the next seiString can't be found.
-    // Fill buffer, and search for the next seiString.
-    if ((match = searchNative(bufferPtr, bufferSize, seiString, seiSize)) ==
-        NULL) {
-      memmove(buffer, bufferPtr, bufferSize);
-      fileRead = fread(buffer + bufferSize, sizeByte,
-                       origBufferSize - bufferSize, filePtr);
-      bufferSize += fileRead;
-      bufferPtr = buffer;
-    }
-
-    whileTimerStart = time(NULL);
-    while ((match = searchNative(bufferPtr, bufferSize, seiString, seiSize)) ==
-           NULL) {
-      // Shift buffer by (bufferSize - (seiSize - 1))
-      memmove(buffer, buffer + (bufferSize - (seiSize - 1)), (seiSize - 1));
-      fileRead = fread(buffer + (seiSize - 1), sizeByte,
-                       bufferSize - (seiSize - 1), filePtr);
-      if (feof(filePtr)) {
-        break;
+    if (!feof(filePtr)) {
+      // If the next seiString can't be found.
+      // Fill buffer, and search for the next seiString.
+      if ((match = searchNative(bufferPtr, bufferSize, seiString, seiSize)) ==
+          NULL) {
+        memmove(buffer, bufferPtr, bufferSize);
+        fileRead = fread(buffer + bufferSize, sizeByte,
+                         origBufferSize - bufferSize, filePtr);
+        bufferSize += fileRead;
+        bufferPtr = buffer;
       }
-      // Stop if timeout reached.
-      if ((time(NULL) - whileTimerStart) > timeout) {
-        fprintf(stderr, "SEI couldn't be found within %d seconds.\n", timeout);
-        return -1;
+
+      whileTimerStart = time(NULL);
+      while ((match = searchNative(bufferPtr, bufferSize, seiString,
+                                   seiSize)) == NULL) {
+        // Shift buffer by (bufferSize - (seiSize - 1))
+        memmove(buffer, buffer + (bufferSize - (seiSize - 1)), (seiSize - 1));
+        fileRead = fread(buffer + (seiSize - 1), sizeByte,
+                         bufferSize - (seiSize - 1), filePtr);
+        // Stop if timeout reached.
+        if ((time(NULL) - whileTimerStart) > timeout) {
+          fprintf(stderr, "SEI couldn't be found within %d seconds.\n",
+                  timeout);
+          return -1;
+        }
       }
     }
 
