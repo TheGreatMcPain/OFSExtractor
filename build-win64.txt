@@ -5,7 +5,7 @@ strip = 'x86_64-w64-mingw32-strip'
 
 [properties]
 c_args = ['-flto=auto']
-c_link_args = ['-static', '-static-libgcc']
+c_link_args = ['-flto=auto', '-static', '-static-libgcc']
 needs_exe_wrapper = true
 
 [host_machine]
