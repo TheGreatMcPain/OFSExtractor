@@ -23,6 +23,7 @@
  */
 #define _FILE_OFFSET_BITS 64
 #include <ctype.h>
+#include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -51,6 +52,20 @@ void printIntro();
 char *printFpsValue(int frameRate);
 int sumOfIntArray(int *array, size_t sizeOfArray);
 
+static char *outFolder;
+
+void intHandler(int SIG_TYPE) {
+  printf("\nOUCH!, CTRL-C was hit.\n");
+  printf("Deleting directory '%s' if it exists.\n", outFolder);
+  if (dirExists(outFolder)) {
+    delDirectory(outFolder);
+  }
+
+  printf("Exiting.\n");
+  signal(SIG_TYPE, SIG_DFL);
+  exit(0);
+}
+
 int main(int argc, char *argv[]) {
   BYTE **OFMDs;
   BYTE newFrameRate = 0;
@@ -58,7 +73,6 @@ int main(int argc, char *argv[]) {
   struct OFMDdata OFMDdata;
   int planesInFile;
   int numOFMDs;
-  char *outFolder;
 
   OFMDdata.validPlanes = (int *)malloc(sizeof(int) * MAXPLANES);
 
@@ -82,15 +96,24 @@ int main(int argc, char *argv[]) {
   printf("Searching file for 3D-Planes.\n\n");
 
   OFMDs = (BYTE **)malloc(sizeof(BYTE *));
+  signal(SIGINT, intHandler);
   numOFMDs = getOFMDsInFile(OFMD_SIZE, BUFFER_SIZE, argv[1], &OFMDs);
 
   // if 'getOFMDsInFile' returns -1 it failed to open input file.
   if (numOFMDs == -1) {
+    printf("Deleting directory '%s' if it exists.\n", outFolder);
+    if (dirExists(outFolder)) {
+      delDirectory(outFolder);
+    }
     exit(1);
   }
 
   if (numOFMDs == 0) {
     printf("This file doesn't have any 3D-Planes.\n");
+    printf("Deleting directory '%s' if it exists.\n", outFolder);
+    if (dirExists(outFolder)) {
+      delDirectory(outFolder);
+    }
     exit(1);
   }
 

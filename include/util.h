@@ -47,6 +47,8 @@ bool testOpenReadFile(const char *filename);
 
 int makeDirectory(const char *path);
 
+int delDirectory(const char *path);
+
 void free2DArray(void ***array, int array2DSize);
 
 const char *getFileExt(const char *fileName);

@@ -28,6 +28,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 #ifdef _WIN32
 #include <direct.h> // _mkdir
@@ -155,6 +156,26 @@ int makeDirectory(const char *path) {
     if (mkdirStatus == -1) {
       printf("Failed to create '%s'\n", path);
       perror("mkdir()");
+      return -1;
+    }
+  }
+
+  return 0;
+}
+
+// Delete a directory.
+// Ignore ENOTEMPTY errors.
+int delDirectory(const char *path) {
+#ifdef _WIN32
+  int rmdirStatus = _rmdir(path);
+#else
+  int rmdirStatus = rmdir(path);
+#endif
+
+  if (errno != ENOTEMPTY) {
+    if (rmdirStatus == -1) {
+      printf("Failed to delete '%s'\n", path);
+      perror("rmdir()");
       return -1;
     }
   }
