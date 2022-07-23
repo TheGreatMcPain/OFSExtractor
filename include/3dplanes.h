@@ -38,7 +38,7 @@ struct OFMDdata {
 };
 
 int getOFMDsInFile(size_t storeSize, size_t bufferSize, const char *filename,
-                   BYTE ***OFMDs);
+                   bool prettyPrint, BYTE ***OFMDs);
 
 void getPlanesFromOFMDs(BYTE ***OFMDs, int numOFMDs, struct OFMDdata *OFMDdata);
 

@@ -97,7 +97,7 @@ int main(int argc, char *argv[]) {
 
   OFMDs = (BYTE **)malloc(sizeof(BYTE *));
   signal(SIGINT, intHandler);
-  numOFMDs = getOFMDsInFile(OFMD_SIZE, BUFFER_SIZE, argv[1], &OFMDs);
+  numOFMDs = getOFMDsInFile(OFMD_SIZE, BUFFER_SIZE, argv[1], false, &OFMDs);
 
   // if 'getOFMDsInFile' returns -1 it failed to open input file.
   if (numOFMDs == -1) {

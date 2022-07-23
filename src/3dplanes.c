@@ -47,7 +47,7 @@
  * 'OFMDs': Pointer to a 2D array which will contain the resulting OFMD buffers.
  */
 int getOFMDsInFile(size_t storeSize, size_t bufferSize, const char *filename,
-                   BYTE ***OFMDs) {
+                   bool prettyPrint, BYTE ***OFMDs) {
   const size_t sizeByte = sizeof(unsigned char);
   const size_t sizeBypePtr = sizeof(unsigned char *);
   const size_t OFMDSearchSize = 200;
@@ -67,6 +67,7 @@ int getOFMDsInFile(size_t storeSize, size_t bufferSize, const char *filename,
   unsigned char *match = NULL;
 
   int progress = 0;
+  int prevProgress = 0;
   int whileTimerStart = time(NULL);
   int OFMDTimerStart = time(NULL);
   const int timeout = 10;
@@ -215,14 +216,28 @@ int getOFMDsInFile(size_t storeSize, size_t bufferSize, const char *filename,
 
     if (!useStdin) {
       progress = (float)ftello(filePtr) / (float)fileSize * 100;
-      fprintf(stderr, "\rProgress: %d%s", progress, "%");
+      if (progress != prevProgress) {
+        if (prettyPrint) {
+          printf("\rProgress: %d%s", progress, "%");
+        } else {
+          printf("Progress: %d%s\n", progress, "%");
+        }
+        prevProgress = progress;
+      }
     }
   }
 
   if (!useStdin) {
     progress = (float)ftello(filePtr) / (float)fileSize * 100;
-    fprintf(stderr, "\rProgress: %d%s", progress, "%");
-    fprintf(stderr, "\n");
+    if (progress != prevProgress) {
+      if (prettyPrint) {
+        printf("\rProgress: %d%s", progress, "%");
+        printf("\n");
+      } else {
+        printf("Progress: %d%s\n", progress, "%");
+      }
+      prevProgress = progress;
+    }
     fflush(stderr);
   }
 

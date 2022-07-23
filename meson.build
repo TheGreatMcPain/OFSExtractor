@@ -1,5 +1,5 @@
 project('OFSExtractor', 'c',
-    version : '1.1-beta1',
+    version : '1.1-beta2',
     default_options : ['warning_level=3', 'b_lto=true']
 )
 
