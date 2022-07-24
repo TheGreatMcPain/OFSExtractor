@@ -219,8 +219,10 @@ int getOFMDsInFile(size_t storeSize, size_t bufferSize, const char *filename,
       if (progress != prevProgress) {
         if (prettyPrint) {
           printf("\rProgress: %d%s", progress, "%");
+          fflush(stdout);
         } else {
           printf("Progress: %d%s\n", progress, "%");
+          fflush(stdout);
         }
         prevProgress = progress;
       }
@@ -233,8 +235,10 @@ int getOFMDsInFile(size_t storeSize, size_t bufferSize, const char *filename,
       if (prettyPrint) {
         printf("\rProgress: %d%s", progress, "%");
         printf("\n");
+        fflush(stdout);
       } else {
         printf("Progress: %d%s\n", progress, "%");
+        fflush(stdout);
       }
       prevProgress = progress;
     }
