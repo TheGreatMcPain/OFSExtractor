@@ -1,0 +1,30 @@
+image: archlinux:base-devel
+
+stages:
+  - build
+
+build-win:
+  stage: build
+  tags:
+    - docker
+  # Taken from:
+  # https://github.com/Joshua-Ashton/arch-mingw-github-action/blob/master/Dockerfile
+  before_script:
+    - echo -e '\n\n[multilib]\nInclude = /etc/pacman.d/mirrorlist\n\n' >> /etc/pacman.conf
+    - echo "Updating Arch"
+    - pacman-key --init
+    - pacman -Sy --needed --noconfirm archlinux-keyring
+    - pacman -Syu --needed --noconfirm
+    - echo "Installing mingw-w64"
+    - pacman -Syu --needed --noconfirm meson mingw-w64
+  script:
+    - echo "Compiling Windows 32bit"
+    - meson build-w32 --cross-file=build-win32.txt --buildtype=release
+    - ninja -C build-w32 -v
+    - echo "Compiling Windows 64bit"
+    - meson build-w64 --cross-file=build-win64.txt --buildtype=release
+    - ninja -C build-w64 -v
+  artifacts:
+    paths:
+      - build-w32/OFSExtractor32.exe
+      - build-w64/OFSExtractor64.exe
