@@ -1,3 +1,27 @@
+# OFSExtractor rust rewrite
+
+I've been wanting to try out Rust for a little while, and couldn't really figure out what to build, so I just decided to rewrite this program.  This gave me the change to improve it a little.
+
+The main improvment is I'm using the `h264-reader` crate for parsing the H264 stream. The old C version simply did a pattern search, which worked, but it felt like a bruteforce solution.
+
+I still need to do a few things before I make a release build, but it current does function.
+
+To build you'll need rust and cargo. Just clone the repository and run...
+
+```
+cargo build -r
+```
+
+The `OFSExtractor` executable should be in the `target` directory.
+
+The usage is shown below...
+
+```
+./OFSExtractor <file.h264/mvc> <out directory>
+```
+
+## Below is the old README. Will Update when rust version has feature parity to C version.
+
 # OFSExtractor (based on MVCPlanes2OFS from BD3D2MK3D's toolset)
 
 This program can extract depth values, aka 3D-Planes, from MVC streams found on 3D Blu-rays.

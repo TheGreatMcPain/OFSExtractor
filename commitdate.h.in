@@ -1,3 +1,0 @@
-#pragma once
-
-#define GIT_COMMIT_DATE "@date@"

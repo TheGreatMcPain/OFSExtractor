@@ -1,0 +1,13 @@
+[package]
+name = "OFSExtractor"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[dependencies]
+h264-reader = "0.8.0"
+memchr = "2.8.0"
+memmap3 = "0.1.0"
+memmem = "0.1.1"
+rand = "0.10.0"
+shellexpand = "3.1.1"
