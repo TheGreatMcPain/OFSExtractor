@@ -1,0 +1,42 @@
+# .gitlab-ci.yml
+image: "rust:latest"
+
+variables:
+  # move cargo data into the project directory so it can be cached
+  CARGO_HOME: ${CI_PROJECT_DIR}/.cargo
+  # treat compiler warnings as errors (in clippy, when running tests, etc.)
+  RUSTFLAGS: -Dwarnings
+
+default:
+  # cancel the job if a newer pipeline starts for the same MR or branch
+  interruptible: true
+  cache:
+    # use the git branch or tag as cache key, so the cache will be
+    # shared among CI runs for the same branch or tag
+    key: ${CI_COMMIT_REF_SLUG}
+    # we cache .cargo/ and target/, which effectively enables
+    # incremental builds across different executions of the CI
+    # for the same branch or the same merge request
+    paths:
+      - .cargo
+      - target
+
+# a format check is run in parallel with the rest
+cargo:fmt:
+  script:
+    - rustup component add rustfmt
+    - cargo fmt --check
+
+# the clippy linter runs before tests are executed
+cargo:clippy:
+  script:
+    - rustup component add clippy
+    - cargo clippy --all-targets
+
+cargo:test:
+  # this job is only run if clippy passes
+  needs: ["cargo:clippy"]
+  script:
+    - cargo test --verbose
+  artifacts:
+    when: always
