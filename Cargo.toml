@@ -11,3 +11,9 @@ memmap3 = "0.1.0"
 memmem = "0.1.1"
 rand = "0.10.0"
 shellexpand = "3.1.1"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
