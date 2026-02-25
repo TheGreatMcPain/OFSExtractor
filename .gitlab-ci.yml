@@ -5,7 +5,7 @@ variables:
   # move cargo data into the project directory so it can be cached
   CARGO_HOME: ${CI_PROJECT_DIR}/.cargo
   # treat compiler warnings as errors (in clippy, when running tests, etc.)
-  RUSTFLAGS: -Dwarnings
+  RUSTFLAGS: -Dwarnings --verbose
 
 default:
   # cancel the job if a newer pipeline starts for the same MR or branch
@@ -37,6 +37,26 @@ cargo:test:
   # this job is only run if clippy passes
   needs: ["cargo:clippy"]
   script:
-    - cargo test --verbose
+    - cargo test
+
+build:win64:
+  needs: ["cargo:test"]
+  script:
+    - apt update && apt upgrade -y
+    - apt install -y g++-mingw-w64-x86-64
+    - rustup target add x86_64-pc-windows-gnu
+    - cargo build -r --target=x86_64-pc-windows-gnu
   artifacts:
-    when: always
+    paths:
+      - target/x86_64-pc-windows-gnu/release/OFSExtractor.exe
+
+build:win32:
+  needs: ["cargo:test"]
+  script:
+    - apt update && apt upgrade -y
+    - apt install -y g++-mingw-w64-i686
+    - rustup target add i686-pc-windows-gnu
+    - cargo build -r --target=i686-pc-windows-gnu
+  artifacts:
+    paths:
+      - target/i686-pc-windows-gnu/release/OFSExtractor.exe
