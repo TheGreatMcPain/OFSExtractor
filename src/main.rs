@@ -22,17 +22,19 @@ struct OFMDdata {
     planes: Vec<Vec<u8>>,
 }
 
-fn main() {
+fn main() -> std::result::Result<(), std::io::Error> {
     let path = std::env::args().nth(1).expect("No path given");
     let out_directory = std::env::args().nth(2).expect("No out path given");
     let mut ofmd_array: Vec<Vec<u8>> = Vec::new();
 
-    get_ofmds_in_file(path, &mut ofmd_array);
+    get_ofmds_in_file(path, &mut ofmd_array)?;
 
     let mut ofmd_data = parse_ofmds(&mut ofmd_array);
     verify_planes(&mut ofmd_data);
 
-    create_ofs_files(&ofmd_data, out_directory, false);
+    create_ofs_files(&ofmd_data, out_directory, false)?;
+
+    Ok(())
 }
 
 fn verify_planes(ofmd_data: &mut OFMDdata) {
@@ -83,11 +85,10 @@ fn parse_depths(ofmd_data: &OFMDdata, plane_num: usize) {
     let mut firstframe = -1;
     let mut lastframe = -1;
     let mut lastval = 0;
-    let mut byte: i32;
     let mut cuts = 0;
 
     for i in 0..ofmd_data.total_frames {
-        byte = ofmd_data.planes[plane_num][i] as i32;
+        let mut byte = ofmd_data.planes[plane_num][i] as i32;
         if byte != lastval {
             cuts += cuts;
             lastval = byte;
@@ -115,11 +116,13 @@ fn parse_depths(ofmd_data: &OFMDdata, plane_num: usize) {
         total += byte;
     }
 
-    let average: f32 = total as f32 / (ofmd_data.total_frames as f32 - undefined as f32);
     println!("NumFrames: {}", ofmd_data.total_frames);
     println!("Minimum depth: {}", minval);
     println!("Maximum depth: {}", maxval);
-    println!("Average depth: {:.3}", average);
+    println!(
+        "Average depth: {:.2}",
+        total as f32 / (ofmd_data.total_frames as f32 - undefined as f32)
+    );
     println!("Number of changes of depth value: {}", cuts);
     println!("First frame with defined depth: {}", firstframe);
     println!("Last frame with defined depth: {}", lastframe);
@@ -189,7 +192,7 @@ fn get_ofmd_from_sei<'a>(sei: &'a SeiMessage, buf: &'a mut Vec<u8>) -> bool {
     true
 }
 
-fn get_ofmds_in_file(path: String, ofmd_array: &mut Vec<Vec<u8>>) {
+fn get_ofmds_in_file(path: String, ofmd_array: &mut Vec<Vec<u8>>) -> Result<(), std::io::Error> {
     let mut reader = AnnexBReader::accumulate(|nal: RefNal<'_>| {
         if !nal.is_complete() {
             return NalInterest::Buffer;
@@ -230,8 +233,8 @@ fn get_ofmds_in_file(path: String, ofmd_array: &mut Vec<Vec<u8>>) {
     let mut file_size = 0;
     let mut buf_reader: Box<dyn BufRead> = Box::new(std::io::stdin().lock());
     if !use_stdin {
-        let file = File::open(path).expect("can't open file");
-        file_size = file.metadata().expect("can't get file metadata").len();
+        let file = File::open(path)?;
+        file_size = file.metadata()?.len();
         buf_reader = Box::new(BufReader::new(file));
     }
 
@@ -239,7 +242,7 @@ fn get_ofmds_in_file(path: String, ofmd_array: &mut Vec<Vec<u8>>) {
     let mut progress = 0;
     let mut last_progress = progress;
     loop {
-        let buf = buf_reader.fill_buf().expect("Fill file buffer");
+        let buf = buf_reader.fill_buf()?;
         let buf_len = buf.len();
 
         if buf.is_empty() {
@@ -260,9 +263,15 @@ fn get_ofmds_in_file(path: String, ofmd_array: &mut Vec<Vec<u8>>) {
         }
     }
     reader.reset();
+
+    Ok(())
 }
 
-fn create_ofs_files(ofmd_data: &OFMDdata, out_directory: String, drop_frame: bool) {
+fn create_ofs_files(
+    ofmd_data: &OFMDdata,
+    out_directory: String,
+    drop_frame: bool,
+) -> std::result::Result<(), std::io::Error> {
     // Structure of an OFS file.
     //
     // Pulled from BD3D2MK3D's 3DPlanes2OFS sources. (thanks, r0lZ!)
@@ -293,44 +302,38 @@ fn create_ofs_files(ofmd_data: &OFMDdata, out_directory: String, drop_frame: boo
     let mut guid: [u8; 16] = std::array::from_fn(|_| rand::rng().random::<u8>());
     let rolls_and_reserved: [u8; 4] = [0x01, 0x00, 0x00, 0x00];
     let timecode: [u8; 4] = [0x00, 0x00, 0x00, 0x00];
-    let mut frame_array: [u8; 4] = [0x00, 0x00, 0x00, 0x00];
+    let frame_array: [u8; 4] = (ofmd_data.total_frames as u32).to_le_bytes();
 
     let path = Path::new(&out_directory);
-    if !path.try_exists().expect("path exists") {
-        std::fs::create_dir(path).expect("create dir");
+    if !path.try_exists()? {
+        std::fs::create_dir(path)?;
     }
-
-    let mut buffer: Vec<u8> = vec![];
-    buffer.extend_from_slice(&signature);
-    buffer.extend_from_slice(&version);
-
-    // Store the framecount in 4 bytes.
-    frame_array[3] = (ofmd_data.total_frames % 256) as u8;
-    frame_array[2] = ((ofmd_data.total_frames >> 8) % 256) as u8;
-    frame_array[1] = ((ofmd_data.total_frames >> 16) % 256) as u8;
-    frame_array[0] = ((ofmd_data.total_frames >> 24) % 256) as u8;
 
     let frame_rate = (ofmd_data.frame_rate * 16) + drop_frame as u8;
 
     for plane in 0..ofmd_data.num_of_planes {
-        if ofmd_data.valid_planes[plane] {
-            guid[15] = plane as u8;
-
-            buffer.extend_from_slice(&guid);
-            buffer.push(frame_rate);
-
-            buffer.extend_from_slice(&rolls_and_reserved);
-            buffer.extend_from_slice(&timecode);
-            buffer.extend_from_slice(&frame_array);
-
-            for x in 0..ofmd_data.total_frames {
-                buffer.push(ofmd_data.planes[plane][x]);
-            }
-
-            let out_path = path.join(format!("3D-Planes-{:02}.ofs", plane));
-            let mut out_file = std::fs::File::create(out_path).expect("create file");
-
-            out_file.write_all(&buffer).expect("write file");
+        if !ofmd_data.valid_planes[plane] {
+            continue;
         }
+
+        let out_path = path.join(format!("3D-Plane-{:02}.ofs", plane));
+        let mut out_file = std::fs::File::create(out_path)?;
+
+        guid[15] = plane as u8;
+
+        let mut buffer = Vec::new();
+
+        buffer.extend_from_slice(&signature);
+        buffer.extend_from_slice(&version);
+        buffer.extend_from_slice(&guid);
+        buffer.extend_from_slice(&[frame_rate]);
+        buffer.extend_from_slice(&rolls_and_reserved);
+        buffer.extend_from_slice(&timecode);
+        buffer.extend_from_slice(&frame_array);
+        buffer.extend_from_slice(&ofmd_data.planes[plane]);
+
+        out_file.write_all(&buffer)?;
     }
+
+    Ok(())
 }
