@@ -12,6 +12,7 @@ dependencies = [
  "memmem",
  "rand",
  "shellexpand",
+ "simpleargs",
 ]
 
 [[package]]
@@ -461,6 +462,12 @@ checksum = "32824fab5e16e6c4d86dc1ba84489390419a39f97699852b66480bb87d297ed8"
 dependencies = [
  "dirs",
 ]
+
+[[package]]
+name = "simpleargs"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "48a84047947edc442f4ed413c008578b10b073675f1c9cd7d7cdda88e0d78816"
 
 [[package]]
 name = "smallvec"
