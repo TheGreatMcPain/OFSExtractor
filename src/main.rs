@@ -8,6 +8,8 @@ use h264_reader::nal::sei::SeiReader;
 use h264_reader::push::NalInterest;
 use memchr::memmem;
 use rand::prelude::*;
+use simpleargs::{Arg, Args, OptionError, UsageError};
+use std::ffi::OsString;
 use std::fs::File;
 use std::io::BufRead;
 use std::io::BufReader;
@@ -22,17 +24,96 @@ struct OFMDdata {
     planes: Vec<Vec<u8>>,
 }
 
-fn main() -> std::result::Result<(), std::io::Error> {
-    let path = std::env::args().nth(1).expect("No path given");
-    let out_directory = std::env::args().nth(2).expect("No out path given");
-    let mut ofmd_array: Vec<Vec<u8>> = Vec::new();
+struct OFSExtractArguments {
+    input: OsString,
+    output_directory: OsString,
+    licence: bool,
+    frame_rate_option: Option<i32>,
+    drop_frame: bool,
+}
 
-    get_ofmds_in_file(path, &mut ofmd_array)?;
+fn parse_args<T>(mut args: Args<T>) -> Result<OFSExtractArguments, UsageError<OsString>>
+where
+    T: Iterator<Item = OsString>,
+{
+    let mut result = OFSExtractArguments {
+        input: "".into(),
+        output_directory: "".into(),
+        licence: false,
+        frame_rate_option: None,
+        drop_frame: false,
+    };
+    let mut input: Option<OsString> = None;
+    let mut output_directory: Option<OsString> = None;
+
+    loop {
+        match args.next() {
+            Arg::Positional(arg) => {
+                if input.is_some() && output_directory.is_some() {
+                    return Err(UsageError::UnexpectedArgument { arg });
+                }
+
+                if input.is_none() {
+                    input = Some(arg)
+                } else if output_directory.is_none() {
+                    output_directory = Some(arg)
+                }
+            }
+            Arg::Named(arg) => arg.parse(|name, value| match name {
+                "dropframe" => {
+                    result.drop_frame = true;
+                    Ok(())
+                }
+                "fps" => {
+                    result.frame_rate_option = Some(value.as_str()?.parse()?);
+                    Ok(())
+                }
+                "licence" => {
+                    result.licence = true;
+                    Ok(())
+                }
+                _ => Err(OptionError::Unknown),
+            })?,
+            Arg::End => break,
+            Arg::Error(err) => return Err(err),
+        }
+    }
+    result.input = match input {
+        Some(path) => path,
+        None => {
+            return Err(UsageError::MissingArgument {
+                name: "input".to_owned(),
+            });
+        }
+    };
+    result.output_directory = match output_directory {
+        Some(path) => path,
+        None => {
+            return Err(UsageError::MissingArgument {
+                name: "output directory".to_owned(),
+            });
+        }
+    };
+
+    Ok(result)
+}
+
+fn main() -> std::result::Result<(), std::io::Error> {
+    let mut os_args = std::env::args_os();
+    os_args.next();
+    let arguments = parse_args(Args::from(os_args)).expect("Issue parsing arguments");
+
+    let mut ofmd_array: Vec<Vec<u8>> = Vec::new();
+    get_ofmds_in_file(&arguments.input.to_string_lossy(), &mut ofmd_array)?;
 
     let mut ofmd_data = parse_ofmds(&mut ofmd_array);
     verify_planes(&mut ofmd_data);
 
-    create_ofs_files(&ofmd_data, out_directory, false)?;
+    create_ofs_files(
+        &ofmd_data,
+        &arguments.output_directory.to_string_lossy(),
+        false,
+    )?;
 
     Ok(())
 }
@@ -192,7 +273,7 @@ fn get_ofmd_from_sei<'a>(sei: &'a SeiMessage, buf: &'a mut Vec<u8>) -> bool {
     true
 }
 
-fn get_ofmds_in_file(path: String, ofmd_array: &mut Vec<Vec<u8>>) -> Result<(), std::io::Error> {
+fn get_ofmds_in_file(path: &str, ofmd_array: &mut Vec<Vec<u8>>) -> Result<(), std::io::Error> {
     let mut reader = AnnexBReader::accumulate(|nal: RefNal<'_>| {
         if !nal.is_complete() {
             return NalInterest::Buffer;
@@ -269,7 +350,7 @@ fn get_ofmds_in_file(path: String, ofmd_array: &mut Vec<Vec<u8>>) -> Result<(), 
 
 fn create_ofs_files(
     ofmd_data: &OFMDdata,
-    out_directory: String,
+    out_directory: &str,
     drop_frame: bool,
 ) -> std::result::Result<(), std::io::Error> {
     // Structure of an OFS file.
