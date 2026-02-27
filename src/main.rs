@@ -8,6 +8,7 @@ use h264_reader::nal::sei::SeiReader;
 use h264_reader::push::NalInterest;
 use memchr::memmem;
 use rand::prelude::*;
+use simpleargs::arg::ArgString;
 use simpleargs::{Arg, Args, OptionError, UsageError};
 use std::ffi::OsString;
 use std::fs::File;
@@ -15,6 +16,8 @@ use std::io::BufRead;
 use std::io::BufReader;
 use std::io::Write;
 use std::path::Path;
+
+include!(concat!(env!("OUT_DIR"), "/license.rs"));
 
 struct OFMDdata {
     frame_rate: u8,
@@ -25,11 +28,56 @@ struct OFMDdata {
 }
 
 struct OFSExtractArguments {
+    help: bool,
     input: OsString,
     output_directory: OsString,
-    licence: bool,
+    license: bool,
     frame_rate_option: Option<i32>,
     drop_frame: bool,
+}
+
+fn print_usage() {
+    println!(
+        "Usage: {} [-help] [-license] <input file> <output folder> [-fps # -dropframe]",
+        std::env::args().next().unwrap()
+    );
+}
+
+fn print_help() {
+    print_usage();
+    println!(
+        "
+  -help : Prints what you're currently reading.
+
+  -license : Print license (MIT).
+
+  <input file> : Can be raw MVC stream, a H264+MVC combined stream (like those from MakeMKV).
+                 Using '-' will read from stdin.
+
+  <output folder> : The output folder which will contain the ofs files.
+                    If undefined the current directory will be used.
+
+Advanced Options: Use with care!
+
+  -fps # : Must be a value between 1 and 4, 6, or 7. See table.
+           This will override the fps value that was sourced by the input file.
+
+           FPS Conversion Table:
+           1 : 23.976
+           2 : 24
+           3 : 25
+           4 : 29.97
+           6 : 50
+           7 : 59.94
+
+  -dropframe : Set drop_frame_flag within the resulting OFS files.
+               Can only be use with FPS value 4.
+        "
+    );
+}
+
+fn print_license() {
+    println!("{}", get_license());
 }
 
 fn parse_args<T>(mut args: Args<T>) -> Result<OFSExtractArguments, UsageError<OsString>>
@@ -37,9 +85,10 @@ where
     T: Iterator<Item = OsString>,
 {
     let mut result = OFSExtractArguments {
+        help: false,
         input: "".into(),
         output_directory: "".into(),
-        licence: false,
+        license: false,
         frame_rate_option: None,
         drop_frame: false,
     };
@@ -60,16 +109,29 @@ where
                 }
             }
             Arg::Named(arg) => arg.parse(|name, value| match name {
+                "help" => {
+                    result.help = true;
+                    Ok(())
+                }
+                "fps" => {
+                    let fps = value.as_str()?.parse()?;
+                    if !((1..=7).contains(&fps) && fps != 5) {
+                        return Err(OptionError::InvalidValue(
+                            Err::<T, &str>("<1, 2, 3, 4, 6, or 7>")
+                                .err()
+                                .unwrap()
+                                .into(),
+                        ));
+                    }
+                    result.frame_rate_option = Some(fps);
+                    Ok(())
+                }
                 "dropframe" => {
                     result.drop_frame = true;
                     Ok(())
                 }
-                "fps" => {
-                    result.frame_rate_option = Some(value.as_str()?.parse()?);
-                    Ok(())
-                }
-                "licence" => {
-                    result.licence = true;
+                "license" => {
+                    result.license = true;
                     Ok(())
                 }
                 _ => Err(OptionError::Unknown),
@@ -78,30 +140,66 @@ where
             Arg::Error(err) => return Err(err),
         }
     }
+    if result.help || result.license {
+        return Ok(result);
+    }
+    if result.drop_frame
+        && result.frame_rate_option.is_some()
+        && result.frame_rate_option.unwrap() != 4
+    {
+        return Err(UsageError::InvalidArgument {
+            arg: "-fps must be 4 to use -dropframe"
+                .to_string()
+                .to_osstr()
+                .into(),
+        });
+    }
+
     result.input = match input {
         Some(path) => path,
         None => {
             return Err(UsageError::MissingArgument {
-                name: "input".to_owned(),
+                name: "input file".to_owned(),
             });
         }
     };
     result.output_directory = match output_directory {
         Some(path) => path,
-        None => {
-            return Err(UsageError::MissingArgument {
-                name: "output directory".to_owned(),
-            });
-        }
+        None => std::env::current_dir()
+            .expect("There's a problem with your current working directory!")
+            .into(),
     };
 
     Ok(result)
 }
 
-fn main() -> std::result::Result<(), std::io::Error> {
+fn main() -> Result<(), std::io::Error> {
     let mut os_args = std::env::args_os();
     os_args.next();
-    let arguments = parse_args(Args::from(os_args)).expect("Issue parsing arguments");
+
+    if os_args.len() == 0 {
+        print_help();
+        return Ok(());
+    }
+
+    let arguments = match parse_args(Args::from(os_args)) {
+        Ok(arguments) => arguments,
+        Err(e) => {
+            print_usage();
+            println!("\n{}", e);
+            return Ok(());
+        }
+    };
+
+    if arguments.help {
+        print_help();
+        return Ok(());
+    }
+
+    if arguments.license {
+        print_license();
+        return Ok(());
+    }
 
     let mut ofmd_array: Vec<Vec<u8>> = Vec::new();
     get_ofmds_in_file(&arguments.input.to_string_lossy(), &mut ofmd_array)?;
@@ -109,10 +207,18 @@ fn main() -> std::result::Result<(), std::io::Error> {
     let mut ofmd_data = parse_ofmds(&mut ofmd_array);
     verify_planes(&mut ofmd_data);
 
+    if ofmd_data.frame_rate != 4 && arguments.drop_frame {
+        println!(
+            "Source fps, '{}', is not compatible with '-dropframe'!",
+            ofmd_data.frame_rate
+        );
+        return Ok(());
+    }
+
     create_ofs_files(
         &ofmd_data,
         &arguments.output_directory.to_string_lossy(),
-        false,
+        arguments.drop_frame,
     )?;
 
     Ok(())
@@ -378,6 +484,9 @@ fn create_ofs_files(
     // 	}
     // }
     //
+    if drop_frame {
+        assert!(ofmd_data.frame_rate == 4);
+    }
     let signature: [u8; 8] = [0x89, 0x4f, 0x46, 0x53, 0x0d, 0x0a, 0x1a, 0x0a];
     let version: [u8; 4] = [0x30, 0x31, 0x30, 0x30];
     let mut guid: [u8; 16] = std::array::from_fn(|_| rand::rng().random::<u8>());
