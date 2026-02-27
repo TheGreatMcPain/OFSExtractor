@@ -1,5 +1,6 @@
 [package]
 name = "OFSExtractor"
+authors = ["TheGreatMcPain"]
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
@@ -11,7 +12,7 @@ memmap3 = "0.1.0"
 memmem = "0.1.1"
 rand = "0.10.0"
 shellexpand = "3.1.1"
-simpleargs = "0.1.0"
+simpleargs = { git = "https://github.com/TheGreatMcPain/simpleargs.git" }
 
 [profile.release]
 opt-level = 3

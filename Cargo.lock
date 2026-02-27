@@ -297,6 +297,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
 
 [[package]]
+name = "os_str_bytes"
+version = "7.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "63eceb7b5d757011a87d08eb2123db15d87fb0c281f65d101ce30a1e96c3ad5c"
+dependencies = [
+ "memchr",
+]
+
+[[package]]
 name = "parking_lot"
 version = "0.12.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -466,8 +475,10 @@ dependencies = [
 [[package]]
 name = "simpleargs"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "48a84047947edc442f4ed413c008578b10b073675f1c9cd7d7cdda88e0d78816"
+source = "git+https://github.com/TheGreatMcPain/simpleargs.git#92e2d69107f5d153c6742e671fbe47ca64fa501c"
+dependencies = [
+ "os_str_bytes",
+]
 
 [[package]]
 name = "smallvec"

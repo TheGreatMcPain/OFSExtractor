@@ -36,10 +36,23 @@ struct OFSExtractArguments {
     drop_frame: bool,
 }
 
+fn print_title() {
+    println!(
+        "{} {} {} by {}",
+        env!("CARGO_PKG_NAME"),
+        env!("CARGO_PKG_VERSION"),
+        std::env::consts::ARCH,
+        env!("CARGO_PKG_AUTHORS")
+    );
+}
+
 fn print_usage() {
+    let args = std::env::args().next().unwrap();
+    let path = std::path::Path::new(&args);
+
     println!(
         "Usage: {} [-help] [-license] <input file> <output folder> [-fps # -dropframe]",
-        std::env::args().next().unwrap()
+        path.file_name().unwrap().to_string_lossy()
     );
 }
 
@@ -174,6 +187,8 @@ where
 }
 
 fn main() -> Result<(), std::io::Error> {
+    print_title();
+
     let mut os_args = std::env::args_os();
     os_args.next();
 
