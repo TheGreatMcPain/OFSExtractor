@@ -28,15 +28,6 @@ struct OFMDdata {
     planes: Vec<Vec<u8>>,
 }
 
-struct OFSExtractArguments {
-    help: bool,
-    input: OsString,
-    output_directory: OsString,
-    license: bool,
-    frame_rate_option: Option<i32>,
-    drop_frame: bool,
-}
-
 fn print_title() {
     println!(
         "{} {} {} by {}",
@@ -92,6 +83,15 @@ Advanced Options: Use with care!
 
 fn print_license() {
     println!("{}", get_license());
+}
+
+struct OFSExtractArguments {
+    help: bool,
+    input: OsString,
+    output_directory: OsString,
+    license: bool,
+    frame_rate_option: Option<i32>,
+    drop_frame: bool,
 }
 
 fn parse_args<T>(mut args: Args<T>) -> Result<OFSExtractArguments, UsageError<OsString>>
@@ -217,8 +217,7 @@ fn main() -> Result<(), std::io::Error> {
         return Ok(());
     }
 
-    let mut ofmd_data = OFMDdata::default();
-    get_ofmds_in_file(&arguments.input.to_string_lossy(), &mut ofmd_data)?;
+    let mut ofmd_data = get_ofmds_in_file(&arguments.input.to_string_lossy())?;
 
     verify_planes(&mut ofmd_data);
 
@@ -338,7 +337,6 @@ fn parse_depths(ofmd_data: &OFMDdata, plane_num: usize) {
 }
 
 fn parse_ofmd(ofmd: &[u8], ofmd_data: &mut OFMDdata) {
-    // First run should allocate the ofmd_data.
     if ofmd_data.planes.is_empty() {
         ofmd_data.frame_rate = ofmd[4] & 15;
         ofmd_data.num_of_planes = ofmd[10] as usize & 0x7F;
@@ -380,7 +378,9 @@ fn get_ofmd_from_sei<'a>(sei: &'a SeiMessage, buf: &'a mut Vec<u8>) -> bool {
     true
 }
 
-fn get_ofmds_in_file(path: &str, ofmd_data: &mut OFMDdata) -> Result<(), std::io::Error> {
+fn get_ofmds_in_file(path: &str) -> Result<OFMDdata, std::io::Error> {
+    let mut ofmd_data = OFMDdata::default();
+
     let mut reader = AnnexBReader::accumulate(|nal: RefNal<'_>| {
         if !nal.is_complete() {
             return NalInterest::Buffer;
@@ -399,7 +399,7 @@ fn get_ofmds_in_file(path: &str, ofmd_data: &mut OFMDdata) -> Result<(), std::io
                             let mut buf: Vec<u8> = vec![];
 
                             if get_ofmd_from_sei(&sei, &mut buf) {
-                                parse_ofmd(&buf, ofmd_data);
+                                parse_ofmd(&buf, &mut ofmd_data);
                             }
                         }
                     }
@@ -452,7 +452,7 @@ fn get_ofmds_in_file(path: &str, ofmd_data: &mut OFMDdata) -> Result<(), std::io
     }
     reader.reset();
 
-    Ok(())
+    Ok(ofmd_data)
 }
 
 fn create_ofs_files(
