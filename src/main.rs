@@ -19,6 +19,7 @@ use std::path::Path;
 
 include!(concat!(env!("OUT_DIR"), "/license.rs"));
 
+#[derive(Default)]
 struct OFMDdata {
     frame_rate: u8,
     total_frames: usize,
@@ -216,10 +217,9 @@ fn main() -> Result<(), std::io::Error> {
         return Ok(());
     }
 
-    let mut ofmd_array: Vec<Vec<u8>> = Vec::new();
-    get_ofmds_in_file(&arguments.input.to_string_lossy(), &mut ofmd_array)?;
+    let mut ofmd_data = OFMDdata::default();
+    get_ofmds_in_file(&arguments.input.to_string_lossy(), &mut ofmd_data)?;
 
-    let mut ofmd_data = parse_ofmds(&mut ofmd_array);
     verify_planes(&mut ofmd_data);
 
     if ofmd_data.frame_rate != 4 && arguments.drop_frame {
@@ -337,38 +337,24 @@ fn parse_depths(ofmd_data: &OFMDdata, plane_num: usize) {
     }
 }
 
-fn parse_ofmds(ofmd_array: &mut Vec<Vec<u8>>) -> Box<OFMDdata> {
-    let mut ofmd_data = Box::<OFMDdata>::new(OFMDdata {
-        frame_rate: ofmd_array[0][4] & 15,
-        total_frames: 0,
-        num_of_planes: ofmd_array[0][10] as usize & 0x7F,
-        valid_planes: vec![],
-        planes: vec![vec![]],
-    });
-
-    for x in ofmd_array.iter() {
-        ofmd_data.total_frames += x[11] as usize & 127;
+fn parse_ofmd(ofmd: &[u8], ofmd_data: &mut OFMDdata) {
+    // First run should allocate the ofmd_data.
+    if ofmd_data.planes.is_empty() {
+        ofmd_data.frame_rate = ofmd[4] & 15;
+        ofmd_data.num_of_planes = ofmd[10] as usize & 0x7F;
+        ofmd_data.planes = vec![vec![]; ofmd_data.num_of_planes];
     }
 
-    // Pre-allocate vectors for performance.
-    ofmd_data.planes = vec![vec![0; ofmd_data.total_frames]; ofmd_data.num_of_planes];
+    let frame_count = ofmd[11] as usize & 127;
 
-    let mut counter: usize;
-    let mut total_frames: usize = 0;
-    for ofmd in ofmd_array {
-        let frame_count: usize = ofmd[11] as usize & 127;
-        for plane in 0..ofmd_data.num_of_planes {
-            counter = total_frames;
-            let start = 14 + (plane * frame_count);
-            let end = 14 + (plane * frame_count) + frame_count;
-            for y in ofmd.iter().take(end).skip(start) {
-                ofmd_data.planes[plane][counter] = *y;
-                counter += 1;
-            }
-        }
-        total_frames += frame_count
+    for plane in 0..ofmd_data.num_of_planes {
+        ofmd_data.planes[plane].extend(
+            ofmd.iter()
+                .take(14 + (plane * frame_count) + frame_count)
+                .skip(14 + (plane * frame_count)),
+        );
     }
-    ofmd_data
+    ofmd_data.total_frames += frame_count;
 }
 
 fn get_ofmd_from_sei<'a>(sei: &'a SeiMessage, buf: &'a mut Vec<u8>) -> bool {
@@ -394,7 +380,7 @@ fn get_ofmd_from_sei<'a>(sei: &'a SeiMessage, buf: &'a mut Vec<u8>) -> bool {
     true
 }
 
-fn get_ofmds_in_file(path: &str, ofmd_array: &mut Vec<Vec<u8>>) -> Result<(), std::io::Error> {
+fn get_ofmds_in_file(path: &str, ofmd_data: &mut OFMDdata) -> Result<(), std::io::Error> {
     let mut reader = AnnexBReader::accumulate(|nal: RefNal<'_>| {
         if !nal.is_complete() {
             return NalInterest::Buffer;
@@ -413,7 +399,7 @@ fn get_ofmds_in_file(path: &str, ofmd_array: &mut Vec<Vec<u8>>) -> Result<(), st
                             let mut buf: Vec<u8> = vec![];
 
                             if get_ofmd_from_sei(&sei, &mut buf) {
-                                ofmd_array.push(buf)
+                                parse_ofmd(&buf, ofmd_data);
                             }
                         }
                     }
