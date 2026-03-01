@@ -3,104 +3,6 @@ use rand::RngExt;
 use std::io::Write;
 use std::path::Path;
 
-pub fn verify_planes(ofmd_data: &mut OFMDdata) {
-    ofmd_data.valid_planes = vec![false; ofmd_data.num_of_planes];
-    for x in 0..ofmd_data.num_of_planes {
-        let mut there_are_planes: bool = false;
-        for y in 0..ofmd_data.total_frames {
-            if ofmd_data.planes[x][y] != 0x80 {
-                there_are_planes = true;
-                ofmd_data.valid_planes[x] = true;
-            }
-        }
-
-        if there_are_planes {
-            println!();
-            println!("3D-Plane #{}", x);
-            parse_depths(ofmd_data, x);
-        } else {
-            println!();
-            println!("3D-Plane #{} is empty.", x);
-        }
-    }
-}
-
-pub fn compare_depths(ofmd_data: &OFMDdata, plane_num: usize) {
-    let mut message_string = "Identical Planes:".to_string();
-    let mut same_plane = false;
-
-    for x in 0..ofmd_data.num_of_planes {
-        if ofmd_data.planes[plane_num] == ofmd_data.planes[x] && x != plane_num {
-            message_string += &format!(" {}", x).to_string();
-            same_plane = true;
-        }
-    }
-
-    if same_plane {
-        println!("{}", message_string);
-    } else {
-        println!("{}", message_string + " None");
-    }
-}
-
-pub fn parse_depths(ofmd_data: &OFMDdata, plane_num: usize) {
-    let mut minval = 128;
-    let mut maxval = -128;
-    let mut total = 0;
-    let mut undefined = 0;
-    let mut firstframe = -1;
-    let mut lastframe = -1;
-    let mut lastval = 0;
-    let mut cuts = 0;
-
-    for i in 0..ofmd_data.total_frames {
-        let mut byte = ofmd_data.planes[plane_num][i] as i32;
-        if byte != lastval {
-            cuts += cuts;
-            lastval = byte;
-        }
-        if byte == 128 {
-            undefined += 1;
-            continue;
-        } else {
-            lastframe = i as i32;
-            if firstframe == -1 {
-                firstframe = i as i32;
-            }
-        }
-
-        if byte > 128 {
-            byte = 128 - byte;
-        }
-
-        if byte < minval {
-            minval = byte;
-        }
-        if byte > maxval {
-            maxval = byte;
-        }
-        total += byte;
-    }
-
-    println!("NumFrames: {}", ofmd_data.total_frames);
-    println!("Minimum depth: {}", minval);
-    println!("Maximum depth: {}", maxval);
-    println!(
-        "Average depth: {:.2}",
-        total as f32 / (ofmd_data.total_frames as f32 - undefined as f32)
-    );
-    println!("Number of changes of depth value: {}", cuts);
-    println!("First frame with defined depth: {}", firstframe);
-    println!("Last frame with defined depth: {}", lastframe);
-    compare_depths(ofmd_data, plane_num);
-    if minval == maxval {
-        println!(
-            "*** Warning This 3D-Plane has a fixed depth of {}! ***",
-            minval,
-        );
-    }
-}
-
 pub fn create_ofs_files(
     ofmd_data: &OFMDdata,
     out_directory: &str,
@@ -149,7 +51,7 @@ pub fn create_ofs_files(
     let frame_rate = (ofmd_data.frame_rate * 16) + drop_frame as u8;
 
     for plane in 0..ofmd_data.num_of_planes {
-        if !ofmd_data.valid_planes[plane] {
+        if ofmd_data.planes[plane].is_empty() {
             continue;
         }
 

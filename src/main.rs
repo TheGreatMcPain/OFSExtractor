@@ -1,11 +1,9 @@
 use ofmd::OFMDdata;
-use ofmd::get_ofmds_in_file;
 use simpleargs::arg::ArgString;
 use simpleargs::{Arg, Args, OptionError, UsageError};
 use std::ffi::OsString;
 
 use ofs::create_ofs_files;
-use ofs::verify_planes;
 
 mod ofmd;
 mod ofs;
@@ -201,9 +199,7 @@ fn main() -> Result<(), std::io::Error> {
         return Ok(());
     }
 
-    let mut ofmd_data = get_ofmds_in_file(&arguments.input.to_string_lossy())?;
-
-    verify_planes(&mut ofmd_data);
+    let ofmd_data = OFMDdata::new(&arguments.input.to_string_lossy())?;
 
     if ofmd_data.frame_rate != 4 && arguments.drop_frame {
         println!(
@@ -212,6 +208,8 @@ fn main() -> Result<(), std::io::Error> {
         );
         return Ok(());
     }
+
+    println!("{}", ofmd_data);
 
     create_ofs_files(
         &ofmd_data,
