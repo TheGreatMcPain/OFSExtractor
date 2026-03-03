@@ -13,6 +13,7 @@ memmem = "0.1.1"
 rand = "0.10.0"
 shellexpand = "3.1.1"
 simpleargs = { git = "https://github.com/TheGreatMcPain/simpleargs.git" }
+wincode = { version = "0.4.5", features = ["derive"] }
 
 [profile.release]
 opt-level = 3
