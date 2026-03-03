@@ -163,7 +163,7 @@ pub fn parse_depths(ofmd_data: &OFMDdata, plane_num: usize) -> String {
     for i in 0..ofmd_data.total_frames {
         let mut byte = ofmd_data.planes[plane_num][i] as i32;
         if byte != lastval {
-            cuts += cuts;
+            cuts += 1;
             lastval = byte;
         }
         if byte == 128 {
