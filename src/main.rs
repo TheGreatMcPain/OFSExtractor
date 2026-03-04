@@ -1,4 +1,4 @@
-use ofmd::OFMDdata;
+use ofmd::OFMDPlane;
 use simpleargs::arg::ArgString;
 use simpleargs::{Arg, Args, OptionError, UsageError};
 use std::ffi::OsString;
@@ -199,20 +199,22 @@ fn main() -> Result<(), std::io::Error> {
         return Ok(());
     }
 
-    let ofmd_data = OFMDdata::new(&arguments.input.to_string_lossy())?;
+    let ofmd_planes = OFMDPlane::get_planes(&arguments.input.to_string_lossy())?;
 
-    if ofmd_data.frame_rate != 4 && arguments.drop_frame {
+    if ofmd_planes[0].frame_rate != 4 && arguments.drop_frame {
         println!(
             "Source fps, '{}', is not compatible with '-dropframe'!",
-            ofmd_data.frame_rate
+            ofmd_planes[0].frame_rate
         );
         return Ok(());
     }
 
-    println!("{}", ofmd_data);
+    for plane in ofmd_planes.iter() {
+        println!("{}", plane);
+    }
 
     create_ofs_files(
-        &ofmd_data,
+        &ofmd_planes,
         &arguments.output_directory.to_string_lossy(),
         arguments.drop_frame,
     )?;

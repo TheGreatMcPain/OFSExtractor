@@ -12,17 +12,19 @@ use std::fs::File;
 use std::io::BufRead;
 use std::io::BufReader;
 
-#[derive(Default)]
-pub struct OFMDdata {
+#[derive(Default, Clone)]
+pub struct OFMDPlane {
+    pub id: usize,
     pub frame_rate: u8,
     pub total_frames: usize,
-    pub num_of_planes: usize,
-    pub planes: Vec<Vec<u8>>,
+    pub valid: bool,
+    pub depths: Vec<u8>,
+    identical_planes: Vec<u8>,
 }
 
-impl OFMDdata {
-    pub fn new(path: &str) -> Result<OFMDdata, std::io::Error> {
-        let mut ofmd_data = OFMDdata::default();
+impl OFMDPlane {
+    pub fn get_planes(path: &str) -> Result<Vec<OFMDPlane>, std::io::Error> {
+        let mut ofmd_planes: Vec<OFMDPlane> = vec![];
 
         let mut reader = AnnexBReader::accumulate(|nal: RefNal<'_>| {
             if !nal.is_complete() {
@@ -42,7 +44,7 @@ impl OFMDdata {
                                 let mut buf: Vec<u8> = vec![];
 
                                 if get_ofmd_from_sei(&sei, &mut buf) {
-                                    parse_ofmd(&buf, &mut ofmd_data);
+                                    parse_ofmd(&buf, &mut ofmd_planes);
                                 }
                             }
                         }
@@ -95,60 +97,44 @@ impl OFMDdata {
         }
         reader.reset();
 
-        // If a plane has no depth (all 0x80), clear it.
-        for plane in &mut ofmd_data.planes {
-            if !plane.iter().any(|&x| x != 0x80) {
-                plane.clear();
+        for plane_num in 0..ofmd_planes.len() {
+            let mut plane = ofmd_planes[plane_num].clone();
+
+            // If a plane has no depth (all 0x80), it's not valid.
+            if !plane.depths.iter().any(|&x| x != 0x80) {
+                plane.valid = false;
             }
+
+            // Check for planes with Identical depth.
+            for x in ofmd_planes.iter() {
+                if plane.depths == x.depths && plane.id != x.id {
+                    plane.identical_planes.push(x.id as u8);
+                }
+            }
+
+            ofmd_planes[plane_num] = plane;
         }
 
-        Ok(ofmd_data)
+        Ok(ofmd_planes)
     }
 }
 
-impl std::fmt::Display for OFMDdata {
+impl std::fmt::Display for OFMDPlane {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f)?;
-        for x in 0..self.num_of_planes {
-            let plane = &self.planes[x];
 
-            if plane.is_empty() {
-                writeln!(f, "3D-Plane #{:02} is empty.", x)?;
-            } else {
-                writeln!(f, "3D-Plane #{:02}", x)?;
-                writeln!(f, "{}", parse_depths(self, x))?;
-            }
+        if self.valid {
+            writeln!(f, "3D-Plane #{:02}", self.id)?;
+            write!(f, "{}", parse_depths(self))?;
+        } else {
+            write!(f, "3D-Plane #{:02} is empty.", self.id)?;
         }
 
         Ok(())
     }
 }
 
-pub fn compare_depths(ofmd_data: &OFMDdata, plane_num: usize) -> String {
-    let mut message_string = String::new();
-    let mut identical = vec![];
-
-    for x in 0..ofmd_data.num_of_planes {
-        if ofmd_data.planes[plane_num] == ofmd_data.planes[x] && x != plane_num {
-            identical.push(x);
-        }
-    }
-
-    if identical.is_empty() {
-        writeln!(message_string, "Identical Planes: None").unwrap();
-    } else {
-        write!(message_string, "Identical Planes:").unwrap();
-        for x in identical {
-            write!(message_string, " {}", x).unwrap();
-        }
-
-        writeln!(message_string).unwrap();
-    }
-
-    message_string
-}
-
-pub fn parse_depths(ofmd_data: &OFMDdata, plane_num: usize) -> String {
+pub fn parse_depths(ofmd_plane: &OFMDPlane) -> String {
     let mut minval = 128;
     let mut maxval = -128;
     let mut total = 0;
@@ -160,8 +146,8 @@ pub fn parse_depths(ofmd_data: &OFMDdata, plane_num: usize) -> String {
 
     let mut output: String = String::new();
 
-    for i in 0..ofmd_data.total_frames {
-        let mut byte = ofmd_data.planes[plane_num][i] as i32;
+    for i in 0..ofmd_plane.total_frames {
+        let mut byte = ofmd_plane.depths[i] as i32;
         if byte != lastval {
             cuts += 1;
             lastval = byte;
@@ -189,23 +175,30 @@ pub fn parse_depths(ofmd_data: &OFMDdata, plane_num: usize) -> String {
         total += byte;
     }
 
-    writeln!(output, "NumFrames: {}", ofmd_data.total_frames).unwrap();
+    writeln!(output, "NumFrames: {}", ofmd_plane.total_frames).unwrap();
     writeln!(output, "Minimum depth: {}", minval).unwrap();
     writeln!(output, "Maximum depth: {}", maxval).unwrap();
     writeln!(
         output,
         "Average depth: {:.2}",
-        total as f32 / (ofmd_data.total_frames as f32 - undefined as f32)
+        total as f32 / (ofmd_plane.total_frames as f32 - undefined as f32)
     )
     .unwrap();
     writeln!(output, "Number of changes of depth value: {}", cuts).unwrap();
     writeln!(output, "First frame with defined depth: {}", firstframe).unwrap();
     writeln!(output, "Last frame with defined depth: {}", lastframe).unwrap();
-    write!(output, "{}", compare_depths(ofmd_data, plane_num)).unwrap();
+    if ofmd_plane.identical_planes.is_empty() {
+        write!(output, "Identical Planes: None").unwrap();
+    } else {
+        write!(output, "Identical Planes:").unwrap();
+        for x in ofmd_plane.identical_planes.clone() {
+            write!(output, " {}", x).unwrap();
+        }
+    }
     if minval == maxval {
-        writeln!(
+        write!(
             output,
-            "*** Warning This 3D-Plane has a fixed depth of {}! ***",
+            "\n*** Warning This 3D-Plane has a fixed depth of {}! ***",
             minval,
         )
         .unwrap();
@@ -214,23 +207,32 @@ pub fn parse_depths(ofmd_data: &OFMDdata, plane_num: usize) -> String {
     output
 }
 
-fn parse_ofmd(ofmd: &[u8], ofmd_data: &mut OFMDdata) {
-    if ofmd_data.planes.is_empty() {
-        ofmd_data.frame_rate = ofmd[4] & 15;
-        ofmd_data.num_of_planes = ofmd[10] as usize & 0x7F;
-        ofmd_data.planes = vec![vec![]; ofmd_data.num_of_planes];
-    }
-
+fn parse_ofmd(ofmd: &[u8], ofmd_planes: &mut Vec<OFMDPlane>) {
+    let num_of_planes = ofmd[10] as usize & 0x7F;
     let frame_count = ofmd[11] as usize & 127;
 
-    for plane in 0..ofmd_data.num_of_planes {
-        ofmd_data.planes[plane].extend(
-            ofmd.iter()
-                .take(14 + (plane * frame_count) + frame_count)
-                .skip(14 + (plane * frame_count)),
-        );
+    if ofmd_planes.is_empty() {
+        for x in 0..num_of_planes {
+            ofmd_planes.push(OFMDPlane {
+                id: x,
+                frame_rate: ofmd[4] & 15,
+                total_frames: 0,
+                valid: true,
+                depths: vec![],
+                identical_planes: vec![],
+            });
+        }
     }
-    ofmd_data.total_frames += frame_count;
+
+    for plane in ofmd_planes {
+        plane.depths.extend(
+            ofmd.iter()
+                .take(14 + (plane.id * frame_count) + frame_count)
+                .skip(14 + (plane.id * frame_count)),
+        );
+
+        plane.total_frames += frame_count;
+    }
 }
 
 fn get_ofmd_from_sei<'a>(sei: &'a SeiMessage, buf: &'a mut Vec<u8>) -> bool {

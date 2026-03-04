@@ -1,4 +1,4 @@
-use crate::OFMDdata;
+use crate::ofmd::OFMDPlane;
 use rand::RngExt;
 use std::io::Write;
 use std::path::Path;
@@ -43,16 +43,16 @@ struct OffsetMetadataSequence {
 }
 
 impl OffsetMetadataSequence {
-    pub fn new(ofmd_data: &OFMDdata, plane: usize, drop_frame: bool) -> OffsetMetadataSequence {
+    pub fn new(ofmd_plane: &OFMDPlane, drop_frame: bool) -> OffsetMetadataSequence {
         OffsetMetadataSequence {
             signature: [0x89, 0x4f, 0x46, 0x53, 0x0d, 0x0a, 0x1a, 0x0a],
             version: [0x30, 0x31, 0x30, 0x30],
-            frame_rate_and_drop_frame: (ofmd_data.frame_rate * 16) + drop_frame as u8,
+            frame_rate_and_drop_frame: (ofmd_plane.frame_rate * 16) + drop_frame as u8,
             guid: Self::get_guid(true),
             rolls_and_reserved: [0; 4],
             timecode: [0; 4],
-            number_of_frames: ofmd_data.total_frames as u32,
-            offsets: ofmd_data.planes[plane].clone(),
+            number_of_frames: ofmd_plane.total_frames as u32,
+            offsets: ofmd_plane.depths.clone(),
         }
     }
 
@@ -69,12 +69,12 @@ impl OffsetMetadataSequence {
 }
 
 pub fn create_ofs_files(
-    ofmd_data: &OFMDdata,
+    ofmd_planes: &Vec<OFMDPlane>,
     out_directory: &str,
     drop_frame: bool,
 ) -> std::result::Result<(), std::io::Error> {
     if drop_frame {
-        assert!(ofmd_data.frame_rate == 4);
+        assert!(ofmd_planes[0].frame_rate == 4);
     }
 
     let path = Path::new(&out_directory);
@@ -82,16 +82,16 @@ pub fn create_ofs_files(
         std::fs::create_dir(path)?;
     }
 
-    for plane in 0..ofmd_data.num_of_planes {
-        if ofmd_data.planes[plane].is_empty() {
+    for plane in ofmd_planes {
+        if !plane.valid {
             continue;
         }
 
-        let out_path = path.join(format!("3D-Plane-{:02}.ofs", plane));
+        let out_path = path.join(format!("3D-Plane-{:02}.ofs", plane.id));
         let mut out_file = std::fs::File::create(out_path)?;
 
-        let mut ofs = OffsetMetadataSequence::new(ofmd_data, plane, drop_frame);
-        ofs.guid[15] = plane as u8;
+        let mut ofs = OffsetMetadataSequence::new(plane, drop_frame);
+        ofs.guid[15] = plane.id as u8;
 
         out_file.write_all(&ofs.to_bytes())?;
     }
