@@ -6,6 +6,7 @@ edition = "2024"
 license = "MIT"
 
 [dependencies]
+exitcode = "1.1.2"
 h264-reader = "0.8.0"
 memchr = "2.8.0"
 memmap3 = "0.1.0"

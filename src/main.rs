@@ -169,7 +169,7 @@ where
     Ok(result)
 }
 
-fn main() -> Result<(), std::io::Error> {
+fn main() {
     print_title();
 
     let mut os_args = std::env::args_os();
@@ -177,7 +177,7 @@ fn main() -> Result<(), std::io::Error> {
 
     if os_args.len() == 0 {
         print_help();
-        return Ok(());
+        std::process::exit(exitcode::USAGE);
     }
 
     let arguments = match parse_args(Args::from(os_args)) {
@@ -185,39 +185,47 @@ fn main() -> Result<(), std::io::Error> {
         Err(e) => {
             print_usage();
             println!("\n{}", e);
-            return Ok(());
+            std::process::exit(exitcode::USAGE);
         }
     };
 
     if arguments.help {
         print_help();
-        return Ok(());
+        return;
     }
 
     if arguments.license {
         print_license();
-        return Ok(());
+        return;
     }
 
-    let ofmd_planes = OFMDPlane::get_planes(&arguments.input.to_string_lossy())?;
+    let ofmd_planes = match OFMDPlane::get_planes(&arguments.input.to_string_lossy()) {
+        Err(e) => {
+            println!("Error: {}", e);
+            std::process::exit(exitcode::IOERR);
+        }
+        Ok(x) => x,
+    };
 
     if ofmd_planes[0].frame_rate != 4 && arguments.drop_frame {
         println!(
             "Source fps, '{}', is not compatible with '-dropframe'!",
             ofmd_planes[0].frame_rate
         );
-        return Ok(());
+        std::process::exit(exitcode::USAGE);
     }
 
     for plane in ofmd_planes.iter() {
         println!("{}", plane);
     }
 
-    create_ofs_files(
+    if let Err(e) = create_ofs_files(
         &ofmd_planes,
         &arguments.output_directory.to_string_lossy(),
         arguments.drop_frame,
-    )?;
+    ) {
+        println!("{:?}", e);
+    }
 
-    Ok(())
+    std::process::exit(exitcode::OK);
 }

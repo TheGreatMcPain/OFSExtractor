@@ -7,6 +7,7 @@ use h264_reader::nal::sei::SeiMessage;
 use h264_reader::nal::sei::SeiReader;
 use h264_reader::push::NalInterest;
 use memchr::memmem;
+use std::cell::RefCell;
 use std::fmt::Write;
 use std::fs::File;
 use std::io::BufRead;
@@ -25,13 +26,20 @@ pub struct OFMDPlane {
 impl OFMDPlane {
     pub fn get_planes(path: &str) -> Result<Vec<OFMDPlane>, std::io::Error> {
         let mut ofmd_planes: Vec<OFMDPlane> = vec![];
+        let reader_error = RefCell::new(Ok(()));
 
         let mut reader = AnnexBReader::accumulate(|nal: RefNal<'_>| {
             if !nal.is_complete() {
                 return NalInterest::Buffer;
             }
 
-            let nal_header = nal.header().unwrap();
+            let nal_header = match nal.header() {
+                Ok(header) => header,
+                Err(e) => {
+                    *reader_error.borrow_mut() = Err(e);
+                    return NalInterest::Ignore;
+                }
+            };
             let nal_unit_type = nal_header.nal_unit_type();
 
             if nal_unit_type == UnitType::SEI {
@@ -49,9 +57,7 @@ impl OFMDPlane {
                             }
                         }
                         Ok(None) => break,
-                        Err(e) => {
-                            println!("{:?}", e);
-                        }
+                        Err(_) => {}
                     }
                 }
             }
@@ -83,6 +89,13 @@ impl OFMDPlane {
             }
 
             reader.push(buf);
+            if reader_error.borrow().is_err() {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "Input data is invalid or corrupt.",
+                ));
+            }
+
             if !use_stdin {
                 file_position += buf_len;
                 progress = ((file_position as f32 / file_size as f32) * 100.0) as i32;
@@ -96,6 +109,13 @@ impl OFMDPlane {
             }
         }
         reader.reset();
+
+        if ofmd_planes.is_empty() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "No depth values found in file.",
+            ));
+        }
 
         for plane_num in 0..ofmd_planes.len() {
             let mut plane = ofmd_planes[plane_num].clone();

@@ -6,6 +6,7 @@ version = 4
 name = "OFSExtractor"
 version = "0.1.0"
 dependencies = [
+ "exitcode",
  "h264-reader",
  "memchr",
  "memmap3",
@@ -121,6 +122,12 @@ name = "equivalent"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
+
+[[package]]
+name = "exitcode"
+version = "1.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "de853764b47027c2e862a995c34978ffa63c1501f2e15f987ba11bd4f9bba193"
 
 [[package]]
 name = "fnv"
