@@ -1,11 +1,10 @@
-use ofmd::OFMDPlane;
 use simpleargs::arg::ArgString;
 use simpleargs::{Arg, Args, OptionError, UsageError};
 use std::ffi::OsString;
 
-use ofs::create_ofs_files;
+use ofs::OffsetMetadataSequence;
+use ofs::create_ofs_file;
 
-mod ofmd;
 mod ofs;
 
 include!(concat!(env!("OUT_DIR"), "/license.rs"));
@@ -199,7 +198,10 @@ fn main() {
         return;
     }
 
-    let ofmd_planes = match OFMDPlane::get_planes(&arguments.input.to_string_lossy()) {
+    let ofs_planes = match OffsetMetadataSequence::get_from_h264(
+        &arguments.input.to_string_lossy(),
+        arguments.drop_frame,
+    ) {
         Err(e) => {
             println!("Error: {}", e);
             std::process::exit(exitcode::IOERR);
@@ -207,24 +209,22 @@ fn main() {
         Ok(x) => x,
     };
 
-    if ofmd_planes[0].frame_rate != 4 && arguments.drop_frame {
+    let frame_rate = ofs_planes[0].get_frame_rate();
+
+    if frame_rate != 4 && arguments.drop_frame {
         println!(
             "Source fps, '{}', is not compatible with '-dropframe'!",
-            ofmd_planes[0].frame_rate
+            frame_rate
         );
         std::process::exit(exitcode::USAGE);
     }
 
-    for plane in ofmd_planes.iter() {
-        println!("{}", plane);
-    }
+    for plane in ofs_planes.iter() {
+        println!("{}", plane.clone().get_stats(&ofs_planes));
 
-    if let Err(e) = create_ofs_files(
-        &ofmd_planes,
-        &arguments.output_directory.to_string_lossy(),
-        arguments.drop_frame,
-    ) {
-        println!("{:?}", e);
+        if let Err(e) = create_ofs_file(plane, &arguments.output_directory.to_string_lossy()) {
+            println!("{:?}", e);
+        }
     }
 
     std::process::exit(exitcode::OK);
