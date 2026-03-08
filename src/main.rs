@@ -1,11 +1,11 @@
 use simpleargs::arg::ArgString;
 use simpleargs::{Arg, Args, OptionError, UsageError};
 use std::ffi::OsString;
-
-use ofs::OffsetMetadataSequence;
-use ofs::create_ofs_file;
+use std::io::Write;
+use std::path::Path;
 
 mod ofs;
+use ofs::OffsetMetadataSequence;
 
 include!(concat!(env!("OUT_DIR"), "/license.rs"));
 
@@ -168,7 +168,7 @@ where
     Ok(result)
 }
 
-fn main() {
+fn main() -> Result<(), std::io::Error> {
     print_title();
 
     let mut os_args = std::env::args_os();
@@ -190,12 +190,12 @@ fn main() {
 
     if arguments.help {
         print_help();
-        return;
+        return Ok(());
     }
 
     if arguments.license {
         print_license();
-        return;
+        return Ok(());
     }
 
     let ofs_planes = match OffsetMetadataSequence::get_from_h264(
@@ -222,9 +222,19 @@ fn main() {
     for plane in ofs_planes.iter() {
         println!("{}", plane.clone().get_stats(&ofs_planes));
 
-        if let Err(e) = create_ofs_file(plane, &arguments.output_directory.to_string_lossy()) {
-            println!("{:?}", e);
+        let path = Path::new(&arguments.output_directory);
+        if !path.try_exists()? {
+            std::fs::create_dir(path)?;
         }
+
+        if plane.is_empty() {
+            continue;
+        }
+
+        let out_path = path.join(format!("3D-Plane-{:02}.ofs", plane.get_id()));
+        let mut out_file = std::fs::File::create(out_path)?;
+
+        out_file.write_all(&plane.to_bytes())?;
     }
 
     std::process::exit(exitcode::OK);

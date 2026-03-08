@@ -12,8 +12,6 @@ use rand::RngExt;
 use std::cell::RefCell;
 use std::fs::File;
 use std::io::BufReader;
-use std::io::Write;
-use std::path::Path;
 use wincode::SchemaRead;
 use wincode::SchemaWrite;
 
@@ -309,25 +307,8 @@ impl OffsetMetadataSequence {
     pub fn get_frame_rate(&self) -> usize {
         (self.frame_rate_and_drop_frame >> 4) as usize
     }
-}
 
-pub fn create_ofs_file(
-    ofs: &OffsetMetadataSequence,
-    out_directory: &str,
-) -> std::result::Result<(), std::io::Error> {
-    let path = Path::new(&out_directory);
-    if !path.try_exists()? {
-        std::fs::create_dir(path)?;
+    pub fn is_empty(&self) -> bool {
+        self.offsets.is_empty()
     }
-
-    if ofs.offsets.is_empty() {
-        return Ok(());
-    }
-
-    let out_path = path.join(format!("3D-Plane-{:02}.ofs", ofs.get_id()));
-    let mut out_file = std::fs::File::create(out_path)?;
-
-    out_file.write_all(&ofs.to_bytes())?;
-
-    Ok(())
 }
