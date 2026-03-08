@@ -1,27 +1,3 @@
-# OFSExtractor rust rewrite
-
-I've been wanting to try out Rust for a little while, and couldn't really figure out what to build, so I just decided to rewrite this program.  This gave me the change to improve it a little.
-
-The main improvment is I'm using the `h264-reader` crate for parsing the H264 stream. The old C version simply did a pattern search, which worked, but it felt like a bruteforce solution.
-
-I still need to do a few things before I make a release build, but it current does function.
-
-To build you'll need rust and cargo. Just clone the repository and run...
-
-```
-cargo build -r
-```
-
-The `OFSExtractor` executable should be in the `target` directory.
-
-The usage is shown below...
-
-```
-./OFSExtractor <file.h264/mvc> <out directory>
-```
-
-## Below is the old README. Will Update when rust version has feature parity to C version.
-
 # OFSExtractor (based on MVCPlanes2OFS from BD3D2MK3D's toolset)
 
 This program can extract depth values, aka 3D-Planes, from MVC streams found on 3D Blu-rays.
@@ -38,7 +14,7 @@ $ OFSExtractor [-license] <input file> <output folder> [-fps # -dropframe]
 | Option            | Description                                                                                                                                                  |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `-license`        | Prints the license.                                                                                                                                          |
-| `<input file>`    | Can be a raw MVC stream, a H264+MVC combined stream (like those from MakeMKV) or a M2TS file. (M2TS is not fully supported.) Using '-' will read from stdin. |
+| `<input file>`    | Can be a raw MVC stream, a H264+MVC combined stream (like those from MakeMKV). Using '-' will read from stdin. |
 | `<output folder>` | The output folder which will contain the OFS files. If undefined the current directory will be used.                                                         |
 
 ### Advanced Options: Use with care!
@@ -58,33 +34,6 @@ $ OFSExtractor [-license] <input file> <output folder> [-fps # -dropframe]
 | 4     | 29.97  |
 | 6     | 50     |
 | 7     | 59.94  |
-
-## Compiling Steps
-
-The only requirements I can think of is meson, and mingw64 (if compiling for Windows).
-
-If building on windows I recommend using msys2, or WSL.
-
-### For Linux
-
-```
-$ meson --buildtype release build
-$ cd build
-$ ninja
-```
-
-You should now have a binary called `OFSExtractor`.\
-It can be installed via `ninja install`.
-
-### Cross compiling for Windows (via MingW64)
-
-```
-$ meson --cross-file build-win32(or 64).txt --buildtype release
-$ cd build
-$ ninja
-```
-
-You should now have an exe file called `OFSExtractor32(or 64).exe`.
 
 ## Acknowledgments
 
