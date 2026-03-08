@@ -320,7 +320,7 @@ pub fn create_ofs_file(
         std::fs::create_dir(path)?;
     }
 
-    if !ofs.offsets.is_empty() {
+    if ofs.offsets.is_empty() {
         return Ok(());
     }
 
