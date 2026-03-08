@@ -1,7 +1,7 @@
 [package]
 name = "OFSExtractor"
 authors = ["TheGreatMcPain"]
-version = "0.1.0"
+version = "1.2.0"
 edition = "2024"
 license = "MIT"
 
