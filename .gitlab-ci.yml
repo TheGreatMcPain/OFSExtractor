@@ -50,7 +50,7 @@ build-windows-64bit:
     TARGET: x86_64-pc-windows-gnu
   artifacts:
     paths:
-      - target/$TARGET/release/OFSExtractor
+      - target/$TARGET/release/OFSExtractor.exe
     expire_in: 1 week
   allow_failure: true
 #
@@ -62,7 +62,7 @@ build-windows-32bit:
     TARGET: i686-pc-windows-gnu
   artifacts:
     paths:
-      - target/$TARGET/release/OFSExtractor
+      - target/$TARGET/release/OFSExtractor.exe
     expire_in: 1 week
   allow_failure: true
 #
@@ -118,7 +118,7 @@ package:windows-64bit:
       "$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/$TARGET/$CI_COMMIT_BRANCH/$PACKAGE_NAME"
   artifacts:
     paths:
-      - target/$TARGET/release/OFSExtractor
+      - target/$TARGET/release/OFSExtractor.exe
       - $PACKAGE_NAME
     expire_in: 1 week
   needs:
@@ -140,7 +140,7 @@ package:windows-32bit:
       "$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/$TARGET/$CI_COMMIT_BRANCH/$PACKAGE_NAME"
   artifacts:
     paths:
-      - target/$TARGET/release/OFSExtractor
+      - target/$TARGET/release/OFSExtractor.exe
       - $PACKAGE_NAME
     expire_in: 1 week
   needs:
