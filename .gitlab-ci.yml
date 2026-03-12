@@ -1,62 +1,160 @@
-# .gitlab-ci.yml
-image: "rust:latest"
-
-variables:
-  # move cargo data into the project directory so it can be cached
-  CARGO_HOME: ${CI_PROJECT_DIR}/.cargo
-  # treat compiler warnings as errors (in clippy, when running tests, etc.)
-  RUSTFLAGS: -Dwarnings --verbose
-
-default:
-  # cancel the job if a newer pipeline starts for the same MR or branch
-  interruptible: true
-  cache:
-    # use the git branch or tag as cache key, so the cache will be
-    # shared among CI runs for the same branch or tag
-    key: ${CI_COMMIT_REF_SLUG}
-    # we cache .cargo/ and target/, which effectively enables
-    # incremental builds across different executions of the CI
-    # for the same branch or the same merge request
-    paths:
-      - .cargo
-      - target
-
-# a format check is run in parallel with the rest
-cargo:fmt:
+stages:
+  - build
+  - test
+  - deploy
+  - release
+# Gitlab CI YAML based on
+# https://about.gitlab.com/blog/secure-rust-development-with-gitlab/
+#
+# Cache configuration to speed up builds by reusing dependencies
+#
+cache:
+  key: $CI_COMMIT_REF_SLUG # Use branch name as cache key
+  paths:
+    - .cargo/ # Cache Cargo registry and git dependencies
+    - target/ # Cache compiled artifacts
+#
+# Base template for Rust jobs - shared configuration
+#
+.rust-template:
+  image: rust:slim # Use slim Rust image for faster downloads
+  before_script:
+    - apt-get update && apt install -y g++-mingw-w64-x86-64 g++-mingw-w64-i686
+#
+# Template for cross-compilation build jobs
+#
+.build-template:
+  extends: .rust-template
+  stage: build
   script:
-    - rustup component add rustfmt
-    - cargo fmt --check
-
-# the clippy linter runs before tests are executed
-cargo:clippy:
+    - rustup target add $TARGET
+    - cargo build --release --target $TARGET
+#
+# Build for Linux x86_64 (primary target platform)
+#
+build-linux:
+  extends: .build-template
+  variables:
+    TARGET: x86_64-unknown-linux-gnu
+  artifacts:
+    paths:
+      - target/$TARGET/release/OFSExtractor
+    expire_in: 1 week
+  allow_failure: false
+#
+# Build for Windows x86_64 (cross-compilation)
+#
+build-windows-64bit:
+  extends: .build-template
+  variables:
+    TARGET: x86_64-pc-windows-gnu
+  artifacts:
+    paths:
+      - target/$TARGET/release/OFSExtractor
+    expire_in: 1 week
+  allow_failure: true
+#
+# Build for Windows x86_64 (cross-compilation)
+#
+build-windows-32bit:
+  extends: .build-template
+  variables:
+    TARGET: i686-pc-windows-gnu
+  artifacts:
+    paths:
+      - target/$TARGET/release/OFSExtractor
+    expire_in: 1 week
+  allow_failure: true
+#
+# Run unit tests
+#
+test:unit:
+  extends: .rust-template
+  stage: test
+  script:
+    - cargo test --verbose
+#
+# Run linter
+#
+test:clippy:
+  extends: .rust-template
+  stage: test
   script:
     - rustup component add clippy
-    - cargo clippy --all-targets
-
-cargo:test:
-  # this job is only run if clippy passes
-  needs: ["cargo:clippy"]
+    - cargo clippy -- -D warnings
+  allow_failure: true
+#
+# Check for formatting
+#
+test:format:
+  extends: .rust-template
+  stage: test
   script:
-    - cargo test
-
-build:win64:
-  needs: ["cargo:test"]
+    - rustup component add rustfmt
+    - cargo fmt -- --check
+  allow_failure: true
+#
+# Template for package
+#
+.deploy-package-zip:
+  image: alpine/curl:latest
+  stage: deploy
+  before_script:
+    - apk add zip
+#
+# Package for Windows 64bit
+#
+package:windows-64bit:
+  extends: .deploy-package-zip
+  variables:
+    PACKAGE_NAME: OFSExtractor-$CI_COMMIT_REF_NAME-64bit.zip
+    TARGET: x86_64-pc-windows-gnu
   script:
-    - apt update && apt upgrade -y
-    - apt install -y g++-mingw-w64-x86-64
-    - rustup target add x86_64-pc-windows-gnu
-    - cargo build -r --target=x86_64-pc-windows-gnu
+    - apk add zip
+    - zip -9 --junk-paths $PACKAGE_NAME target/$TARGET/release/OFSExtractor.exe
+    - |
+      curl -v --location --header "JOB-TOKEN: $CI_JOB_TOKEN" \
+      --upload-file $PACKAGE_NAME \
+      "$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/$TARGET/$CI_COMMIT_BRANCH/$PACKAGE_NAME"
   artifacts:
     paths:
-      - target/x86_64-pc-windows-gnu/release/OFSExtractor.exe
-
-build:win32:
-  needs: ["cargo:test"]
+      - target/$TARGET/release/OFSExtractor
+      - $PACKAGE_NAME
+    expire_in: 1 week
+  needs:
+    - build-windows-64bit
+#
+# Package for Windows 32bit
+#
+package:windows-32bit:
+  extends: .deploy-package-zip
+  variables:
+    PACKAGE_NAME: OFSExtractor-$CI_COMMIT_REF_NAME-32bit.zip
+    TARGET: i686-pc-windows-gnu
   script:
-    - apt update && apt upgrade -y
-    - apt install -y g++-mingw-w64-i686
-    - rustup target add i686-pc-windows-gnu
-    - cargo build -r --target=i686-pc-windows-gnu
+    - apk add zip
+    - zip -9 --junk-paths $PACKAGE_NAME target/$TARGET/release/OFSExtractor.exe
+    - |
+      curl -v --location --header "JOB-TOKEN: $CI_JOB_TOKEN" \
+      --upload-file $PACKAGE_NAME \
+      "$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/$TARGET/$CI_COMMIT_BRANCH/$PACKAGE_NAME"
   artifacts:
     paths:
-      - target/i686-pc-windows-gnu/release/OFSExtractor.exe
+      - target/$TARGET/release/OFSExtractor
+      - $PACKAGE_NAME
+    expire_in: 1 week
+  needs:
+    - build-windows-32bit
+#
+# Release
+#
+release_job:
+  stage: release
+  image: registry.gitlab.com/gitlab-org/cli:latest
+  rules:
+    - if: $CI_COMMIT_TAG
+  script:
+    - echo "Running release_job"
+  release:
+    tag_name: $CI_COMMIT_TAG
+    description: $CI_COMMIT_TAG
